@@ -20,21 +20,21 @@
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
-  RCLCPP_WARN(rclcpp::get_logger("audio_capture"),
+  RCLCPP_WARN(rclcpp::get_logger("audio_io"),
               "This is audio capture example!");
 
-  std::string node_name = "audio_capture";
-  hobot::audio::HBAudioIo audio_capture(node_name);
-  if (audio_capture.Init() == 0) {
-    if (audio_capture.Run() != 0) {
-      RCLCPP_ERROR(rclcpp::get_logger("audio_capture"),
+  std::string node_name = "audio_io";
+  hobot::audio::HBAudioIo audio_io(node_name);
+  if (audio_io.Init() == 0) {
+    if (audio_io.Run() != 0) {
+      RCLCPP_ERROR(rclcpp::get_logger("audio_io"),
                    "Run HBAudioIo failed!");
     } else {
-      RCLCPP_INFO(rclcpp::get_logger("audio_capture"),
+      RCLCPP_INFO(rclcpp::get_logger("audio_io"),
                   "Run HBAudioIo done!");
     }
   } else {
-    RCLCPP_ERROR(rclcpp::get_logger("audio_capture"),
+    RCLCPP_ERROR(rclcpp::get_logger("audio_io"),
                  "Init HBAudioIo failed!");
   }
 
