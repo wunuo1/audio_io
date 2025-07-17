@@ -20,6 +20,7 @@
 #include <string>
 #include "speech_engine.h"
 #include <json/json.h>
+#include <chrono>
 
 namespace hobot {
 namespace audio {
@@ -98,7 +99,7 @@ int HBAudioIo::Init() {
     if (root.isMember("cmd_word") && root["cmd_word"].isArray()) {
       const Json::Value& cmdWords = root["cmd_word"];
       for (const auto& word : cmdWords) {
-        std::cout << "命令词: " << word.asString() << std::endl;
+        // std::cout << "命令词: " << word.asString() << std::endl;
         v_cmd_word_->push_back(word.asString());
       }
     }
@@ -218,6 +219,8 @@ int HBAudioIo::Run() {
   // 启动麦克风采集线程
   auto capture_task = std::make_shared<std::thread>(
       std::bind(&HBAudioIo::MicphoneGetThread, this));
+  auto pcm_task = std::make_shared<std::thread>(
+      std::bind(&HBAudioIo::PcmThread, this));
   auto speaker_task = std::make_shared<std::thread>(
       std::bind(&HBAudioIo::SpeakerThread, this));
 
@@ -227,14 +230,35 @@ int HBAudioIo::Run() {
   exec.spin();
   // 退出时关闭线程
   if (capture_task && capture_task->joinable()) {
+    std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+    speaker_working_ = false;
+    exiting_ = true;
+    micphone_lock.unlock();
+    micphone_cv_.notify_one();
     capture_task->join();
     capture_task.reset();
   }
   if (speaker_task && speaker_task->joinable()) {
-    get_tts_msg_ = true;
-    tts_cv_.notify_one();
+    std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
+    while (!playback_queue_.empty()) {
+        playback_queue_.pop();
+    }
+    exiting_ = true;
+    playback_queue_lock.unlock();
+    playback_queue_cv_.notify_one();
     speaker_task->join();
     speaker_task.reset();
+  }
+  if (pcm_task && pcm_task->joinable()) {
+    std::unique_lock<std::mutex> tts_queue_lock(tts_queue_mtx_);
+    while (!tts_data_queue_.empty()) {
+        tts_data_queue_.pop();
+    }
+    exiting_ = true;
+    tts_queue_lock.unlock();
+    tts_queue_cv_.notify_one();
+    pcm_task->join();
+    pcm_task.reset();
   }
   return 0;
 }
@@ -249,31 +273,36 @@ int HBAudioIo::MicphoneGetThread() {
   snd_pcm_sframes_t frames;
   frames = micphone_device_->period_size;
   int buffer_size = snd_pcm_frames_to_bytes(micphone_device_->handle, frames);
-  std::cout << "MicphoneGetThread------buffer_size:" << buffer_size << std::endl;
   char *buffer = new char[buffer_size];
   char *buffer_1 = new char[buffer_size];
   auto vec_ptr = std::make_shared<std::vector<double>>();
   int num = 0;
   while (rclcpp::ok()) {
-    ret = alsa_device_read(micphone_device_, buffer, frames);
-    if (ret <= 0) continue;
-    RCLCPP_DEBUG(rclcpp::get_logger("audio_io"), "capture audio buffer_size:%d",
-                 buffer_size);
-    audio_num_++;
-    int data_audio_size = buffer_size / 2 / 2;
-    int16_t *src_ptr = (int16_t *)buffer;
-    for (int i = 0; i < data_audio_size; i++) {
-      vec_ptr->push_back((double)(src_ptr[i * 2])*2.5);
+    {
+      std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+      micphone_cv_.wait(micphone_lock, [this] { return !speaker_working_ || exiting_;});
+      micphone_lock.unlock();
+      if(exiting_ == true) break;
+      ret = alsa_device_read(micphone_device_, buffer, frames);
+      if (ret <= 0) continue;
+      RCLCPP_DEBUG(rclcpp::get_logger("audio_io"), "capture audio buffer_size:%d",
+                  buffer_size);
+      audio_num_++;
+      int data_audio_size = buffer_size / 2 / 2;
+      int16_t *src_ptr = (int16_t *)buffer;
+      for (int i = 0; i < data_audio_size; i++) {
+        vec_ptr->push_back((double)(src_ptr[i * 2])*2.5);
+      }
+      if(num % 4 == 0){
+        speech_engine::Instance()->send_data(vec_ptr);
+        vec_ptr->clear();
+        num = 0;
+      }
+      if (save_audio_ && audio_infile_.is_open()) {
+        audio_infile_.write(buffer_1, buffer_size / 2);
+      }
+      num++;
     }
-    if(num % 4 == 0){
-      speech_engine::Instance()->send_data(vec_ptr);
-      vec_ptr->clear();
-      num = 0;
-    }
-    if (save_audio_ && audio_infile_.is_open()) {
-      audio_infile_.write(buffer_1, buffer_size / 2);
-    }
-    num++;
   }
   RCLCPP_WARN(rclcpp::get_logger("audio_io"), "stop capture audio");
   delete[] buffer;
@@ -287,6 +316,9 @@ void HBAudioIo::AudioCmdDataFunc(std::string cmd_word) {
   frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
   frame->cmd_word = cmd_word;
   msg_publisher_->publish(std::move(frame));
+  auto message = std::make_unique<std_msgs::msg::String>();
+  message->data = cmd_word;
+  asr_msg_publisher_->publish(std::move(message));
 }
 
 void HBAudioIo::AudioASRFunc(std::string asr) {
@@ -322,56 +354,121 @@ void HBAudioIo::AudioASRFunc(std::string asr) {
   }
 }
 
+//判断是否包含中文
+static bool containsChinese(const std::string& str) {
+    for (size_t i = 0; i < str.size(); ) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        if (c >= 0xE4 && c <= 0xE9) {
+            if (i + 2 < str.size()) {
+                unsigned char c1 = static_cast<unsigned char>(str[i + 1]);
+                unsigned char c2 = static_cast<unsigned char>(str[i + 2]);
+                if ((c1 & 0xC0) == 0x80 && (c2 & 0xC0) == 0x80) {
+                    return true;
+                }
+            }
+            i += 3;
+        } else if (c >= 0xC0) {
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    return false;
+}
+
 int HBAudioIo::SpeakerThread() {
+  while (rclcpp::ok()) {
+    std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
+    playback_queue_cv_.wait(playback_queue_lock, [this] { return !playback_queue_.empty() || exiting_; });
+    if(exiting_ == true) break;
+    auto pcm_data = std::move(playback_queue_.front().first);
+    auto pcm_size_1 = playback_queue_.front().second;
+    playback_queue_.pop();
+    playback_queue_lock.unlock();
+    std::vector<int16_t> pcm_int16;
+    auto pcm_float = pcm_data.get();
+    for (int i = 0; i < pcm_size_1; i++) {
+      pcm_int16.push_back(*pcm_float);
+      pcm_int16.push_back(*pcm_float);
+      pcm_float++;
+    }
+    if (speaker_device_) {
+      snd_pcm_sframes_t frames = snd_pcm_bytes_to_frames(
+          speaker_device_->handle, pcm_int16.size() * sizeof(int16_t));
+      snd_pcm_prepare(speaker_device_->handle);  // 耗时0.1ms
+      alsa_device_write(speaker_device_, pcm_int16.data(), frames);// 讲话
+      snd_pcm_drop(speaker_device_->handle);  // 耗时1ms
+    }
+    std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+    msg_num_--;
+    if(msg_num_ <= 0){
+      speaker_working_ = false;
+    }
+    micphone_lock.unlock();
+    micphone_cv_.notify_one();
+
+    // if(!playback_queue_.empty()){
+    //   std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+    //   speaker_working_ = true;
+    //   micphone_lock.unlock();
+    // }else{
+    //   std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+    //   speaker_working_ = false;
+    //   micphone_lock.unlock();
+    //   micphone_cv_.notify_one();
+    // }
+  }
+  return 0;
+}
+
+
+int HBAudioIo::PcmThread() {
   RCLCPP_WARN(rclcpp::get_logger("audio_io"), "start to speaker audio");
   if (!speaker_device_) {
     RCLCPP_ERROR(rclcpp::get_logger("audio_io"), "speaker device is null");
     return -1;
   }
-  while (rclcpp::ok()) {
-    std::unique_ptr<float[]> pcm_data;
-    int pcm_size;
-    {
-      std::unique_lock<std::mutex> lock(tts_mtx_);
-      tts_cv_.wait(lock, [this] { return get_tts_msg_; });
-      if(rclcpp::ok()){
-        auto ret = ConvertToPCM(tts_msg_, pcm_data, pcm_size);
-        playback_queue_.push(std::make_pair(std::move(pcm_data), pcm_size));
-        while (!playback_queue_.empty()) {
-          auto pcm_data = std::move(playback_queue_.front().first);
-          auto pcm_size = playback_queue_.front().second;
-          playback_queue_.pop();
-          std::vector<int16_t> pcm_int16;
-          auto pcm_float = pcm_data.get();
-          for (int i = 0; i < pcm_size; i++) {
-            pcm_int16.push_back(*pcm_float);
-            pcm_int16.push_back(*pcm_float);
-            pcm_float++;
-          }
-          if (speaker_device_) {
-            snd_pcm_sframes_t frames = snd_pcm_bytes_to_frames(
-                speaker_device_->handle, pcm_int16.size() * sizeof(int16_t));
-            snd_pcm_prepare(speaker_device_->handle);  // 耗时0.1ms
-            alsa_device_write(speaker_device_, pcm_int16.data(), frames);
-            snd_pcm_drop(speaker_device_->handle);  // 耗时1ms
-          }
-        }
-        get_tts_msg_ = false;
-      }
 
+  std::unique_ptr<float[]> pcm_data;
+  int pcm_size;
+  while (rclcpp::ok()) {
+    std::unique_lock<std::mutex> tts_queue_lock(tts_queue_mtx_);
+    tts_queue_cv_.wait(tts_queue_lock, [this] { return !tts_data_queue_.empty() || exiting_;});
+    if(exiting_ == true) break;
+    tts_msg_ = tts_data_queue_.front();
+    tts_data_queue_.pop();
+    tts_queue_lock.unlock();
+    if(rclcpp::ok()){
+      if (containsChinese(tts_msg_)){
+        auto ret = ConvertToPCM(tts_msg_, pcm_data, pcm_size);
+        std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
+        playback_queue_.push(std::make_pair(std::move(pcm_data), pcm_size));
+        playback_queue_lock.unlock();
+        playback_queue_cv_.notify_one();
+      }
+      else{
+        std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+        msg_num_--;
+        micphone_lock.unlock();
+      }
     }
+
   }
   RCLCPP_WARN(rclcpp::get_logger("audio_io"), "stop speaker audio");
   return 0;
 }
 
+
 void HBAudioIo::TTSMsgCallback(const std_msgs::msg::String::SharedPtr msg){
   {
-    std::lock_guard<std::mutex> lock(tts_mtx_);
-    tts_msg_ = msg->data;
-    get_tts_msg_ = true;
+    std::lock_guard<std::mutex> tts_queue_lock(tts_queue_mtx_);
+    tts_data_queue_.push(msg->data);
   }
-  tts_cv_.notify_one();
+  std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+  speaker_working_ = true;
+  msg_num_++;
+  micphone_lock.unlock();
+  tts_queue_cv_.notify_one();
 }
 
 }  // namespace audio

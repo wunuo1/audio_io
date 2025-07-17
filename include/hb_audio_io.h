@@ -57,6 +57,7 @@ class HBAudioIo : public rclcpp::Node {
  private:
   int MicphoneGetThread();
   int SpeakerThread();
+  int PcmThread();
   void asr_send_th();
   void TTSMsgCallback(const std_msgs::msg::String::SharedPtr msg);
   void AudioCmdDataFunc(std::string cmd_word);
@@ -92,8 +93,8 @@ class HBAudioIo : public rclcpp::Node {
   std::string asr_model_ = "sense-voice-small-fp16.gguf";
   std::string asr_model_path_ = "";
   std::string audio_pub_topic_name_ = "/audio_smart";
-  std::string asr_pub_topic_name_ = "/audio_asr";
-  std::string tts_sub_topic_name_ = "/audio_tts";
+  std::string asr_pub_topic_name_ = "/prompt_text";
+  std::string tts_sub_topic_name_ = "/tts_text";
   std::ofstream audio_infile_;
   std::ofstream audio_sdk_;
   bool save_audio_ = false;
@@ -104,11 +105,17 @@ class HBAudioIo : public rclcpp::Node {
   std::string cmd_word_path_ = "./config/cmd_word.json";
 
   
-  std::mutex tts_mtx_;
-  std::condition_variable tts_cv_;
-  bool get_tts_msg_ = false;
+  std::mutex tts_queue_mtx_;
+  std::mutex micphone_mtx_;
+  std::mutex playback_queue_mtx_;
+  std::condition_variable tts_queue_cv_;
+  std::condition_variable micphone_cv_;
+  std::condition_variable playback_queue_cv_;
+  bool speaker_working_ = false;
+  bool exiting_ = false;
+  int msg_num_ = 0;
   std::string tts_msg_ = "";
-
+  std::queue<std::string> tts_data_queue_;
   rclcpp::Publisher<audio_msg::msg::SmartAudioData>::SharedPtr msg_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr asr_msg_publisher_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr tts_msg_subscriber_;

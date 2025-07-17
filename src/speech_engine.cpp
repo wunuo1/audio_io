@@ -376,14 +376,16 @@ void speech_engine::process(void) {
               tmp_str += ctx->vocab.id_to_token[id];
             }
           }
-          for (auto& cmd : *v_cmd_word_) {
-            if (tmp_str == cmd) {
-              audio_cmd_cb_(tmp_str); //todo
-              break;
-            }
+          // for (auto& cmd : *v_cmd_word_) {
+          //   if (tmp_str == cmd) {
+          //     audio_cmd_cb_(tmp_str); //todo
+          //     break;
+          //   }
 
-          }
-          
+          // }
+
+          audio_cmd_cb_(tmp_str); //todo
+
           size_t pos = tmp_str.find(wakeup_name_, 0);
           if (pos != std::string::npos) {
             if (audio_asr_cb_) {
