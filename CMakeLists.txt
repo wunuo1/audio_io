@@ -41,6 +41,8 @@ find_package(std_msgs REQUIRED)
 find_package(jsoncpp REQUIRED)
 #find_package(OpenSSL REQUIRED)
 
+find_library(WIRINGPI_LIBRARY wiringPi)
+
 include_directories(
   include
   wetts/include
@@ -164,7 +166,7 @@ set(X3_AUDIO_LIB asound sense-voice-core ggml-cpu ggml-base ggml jsoncpp)
 
 
 target_link_libraries(${PROJECT_NAME}
-   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES} tts
+   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES} tts ${WIRINGPI_LIBRARY} pthread
 )
 
 ament_target_dependencies(${PROJECT_NAME}

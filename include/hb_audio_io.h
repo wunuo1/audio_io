@@ -32,6 +32,7 @@
 #include "std_msgs/msg/string.hpp"
 #include "utils/alsa_device.h"
 #include "tts_api.h"
+#include "WS2812B.h"
 //#include "speech_engine.h"
 
 namespace hobot {
@@ -65,7 +66,7 @@ class HBAudioIo : public rclcpp::Node {
   int ConvertToPCM(const std::string& msg,
                                std::unique_ptr<float[]>& pcm_data,
                                int& pcm_size);
-
+  void WaitForRisingEdge();
  private:
   int micphone_enable_ = 1;
   std::shared_ptr<std::thread> micphone_thread_;
@@ -104,21 +105,24 @@ class HBAudioIo : public rclcpp::Node {
   std::shared_ptr<std::vector<std::string>> v_cmd_word_;
   std::string cmd_word_path_ = "./config/cmd_word.json";
 
-  
+  std::mutex start_all_mtx_;
   std::mutex tts_queue_mtx_;
   std::mutex micphone_mtx_;
   std::mutex playback_queue_mtx_;
+
+  std::condition_variable start_all_cv_;
   std::condition_variable tts_queue_cv_;
   std::condition_variable micphone_cv_;
   std::condition_variable playback_queue_cv_;
   bool speaker_working_ = false;
   bool exiting_ = false;
-  int msg_num_ = 0;
   std::string tts_msg_ = "";
   std::queue<std::string> tts_data_queue_;
   rclcpp::Publisher<audio_msg::msg::SmartAudioData>::SharedPtr msg_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr asr_msg_publisher_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr tts_msg_subscriber_;
+  WS2812B strip;
+  bool start_run_ = false;
 };
 
 }  // namespace audio
