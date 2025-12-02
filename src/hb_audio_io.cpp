@@ -27,12 +27,19 @@ namespace hobot {
 namespace audio {
 HBAudioIo::HBAudioIo(const std::string &node_name,
                                const NodeOptions &options)
-    : rclcpp::Node(node_name, options), strip(5){
+    : rclcpp::Node(node_name, options), strip(5), sherpa_tts_(){
   
   std::string tros_distro
       = std::string(std::getenv("TROS_DISTRO")? std::getenv("TROS_DISTRO") : "");
-  asr_model_path_ = "/opt/tros/" + tros_distro + "/lib/sensevoice_ros2/model/";
+  // asr_model_path_ = "/opt/tros/" + tros_distro + "/lib/sensevoice_ros2/model/";
   //asr_model_path_ = "./install/lib/audio_io/model/";
+  
+  // std::thread loader([this, tros_distro]() {
+  //       this->LoadTtsModelAsync(tros_distro);
+  //   });
+  // loader.detach();
+
+  asr_model_path_ = "/root/";
   cmd_word_path_ = "/opt/tros/" + tros_distro + "/lib/sensevoice_ros2/config/cmd_word.json";
   //cmd_word_path_ = "./install/lib/audio_io/config/cmd_word.json";
 
@@ -50,6 +57,8 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                        wakeup_name_);
   this->declare_parameter<std::string>("tts_sub_topic_name",
                                        tts_sub_topic_name_);
+  this->declare_parameter<std::string>("tts_config_path",
+                                       tts_config_path_);
 
   this->get_parameter<std::string>("micphone_name",
                                    micphone_name_);
@@ -65,18 +74,20 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                    wakeup_name_);
   this->get_parameter<std::string>("tts_sub_topic_name",
                                    tts_sub_topic_name_);
+  this->get_parameter<std::string>("tts_config_path",
+                                   tts_config_path_);
   
   if (wakeup_name_.length() > 0) {
     wakeup_name_1_ = wakeup_name_ + ",";
   }
-
   int err_code = 0;
-  tts_ =
-      wetts_init(std::string("/opt/tros/" + tros_distro + "/lib/hobot_tts/tts_model").c_str(),
-      "tts.flags", &err_code);
-  struct audio_info info = wetts_audio_info(tts_);
-  pcm_data_ = new char[info.max_len];
 
+  // tts_ =
+  //     wetts_init(std::string("/opt/tros/" + tros_distro + "/lib/hobot_tts/tts_model").c_str(),
+  //     "tts.flags", &err_code);
+  // struct audio_info info = wetts_audio_info(tts_);
+  // pcm_data_ = new char[info.max_len];
+  
   asr_model_path_ += asr_model_;
   std::stringstream ss;
   ss << "Parameter:"
@@ -91,8 +102,22 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
 
 HBAudioIo::~HBAudioIo() { DeInit(); }
 
+// void HBAudioIo::LoadTtsModelAsync(const std::string& tros_distro) {
+//     std::string model_path = "/opt/tros/" + tros_distro + "/lib/hobot_tts/tts_model";
+//     int err_code = 0;
+//     tts_ = wetts_init(model_path.c_str(), "tts.flags", &err_code);
+//     struct audio_info info = wetts_audio_info(tts_);
+//     pcm_data_ = new char[info.max_len];
+//     std::cout<<"----------------------init--------------------------"<<std::endl; 
+//     std::unique_lock<std::mutex> model_init_lock(model_init_mtx_);
+//     model_init_ = true;
+//     model_init_cv_.notify_one();
+// }
+
+
 int HBAudioIo::Init() {
   v_cmd_word_ = std::make_shared<std::vector<std::string>>();
+  
   std::ifstream cmd_word(cmd_word_path_);
   if (cmd_word.is_open()) {
     Json::Value root;
@@ -130,28 +155,31 @@ int HBAudioIo::Init() {
     return -1;
   }
 
-
+  
   /* init speaker device*/
-  speaker_device_ = alsa_device_allocate();
-  if (!speaker_device_) {
-    RCLCPP_ERROR(rclcpp::get_logger("audio_io"),
-                 "open speaker device fail, ret=%d", ret);
-  }
-  speaker_device_->name = const_cast<char*>(micphone_name_.c_str());
-  speaker_device_->format = SND_PCM_FORMAT_S16;
-  speaker_device_->direct = SND_PCM_STREAM_PLAYBACK;
-  speaker_device_->rate = 16000;
-  speaker_device_->channels = 2;
-  speaker_device_->buffer_time = 0;  // use default buffer time
-  speaker_device_->nperiods = 4;
-  speaker_device_->period_size = 512;  // 1 period including 1024 frames
+  // speaker_device_ = alsa_device_allocate();
+  // if (!speaker_device_) {
+  //   RCLCPP_ERROR(rclcpp::get_logger("audio_io"),
+  //                "open speaker device fail, ret=%d", ret);
+  // }
+  // speaker_device_->name = const_cast<char*>(micphone_name_.c_str());
+  // speaker_device_->format = SND_PCM_FORMAT_S16;
+  // speaker_device_->direct = SND_PCM_STREAM_PLAYBACK;
+  // speaker_device_->rate = 16000;
+  // speaker_device_->channels = 2;
+  // speaker_device_->buffer_time = 0;  // use default buffer time
+  // speaker_device_->nperiods = 4;
+  // speaker_device_->period_size = 512;  // 1 period including 1024 frames
 
-  ret = alsa_device_init(speaker_device_);
-  if (ret < 0) {
-    if (speaker_device_) free(speaker_device_);
-    RCLCPP_ERROR(rclcpp::get_logger("audio_io"),
-                 "alsa device speaker init fail, ret=%d", ret);
-  }
+  // ret = alsa_device_init(speaker_device_);
+  // if (ret < 0) {
+  //   if (speaker_device_) free(speaker_device_);
+  //   RCLCPP_ERROR(rclcpp::get_logger("audio_io"),
+  //                "alsa device speaker init fail, ret=%d", ret);
+  // }
+  std::cout<<"-----------------+"<<std::endl;
+  sherpa_tts_.Init(micphone_name_, tts_config_path_);
+  // alsa_ = std::make_shared<sherpa_onnx::AlsaPlay>(micphone_name_.c_str(), 22050);
 
   RCLCPP_WARN_STREAM(rclcpp::get_logger("audio_io"),
     "asr_model_path_ is [" << asr_model_path_ << "]");
@@ -202,20 +230,6 @@ int HBAudioIo::DeInit() {
   return 0;
 }
 
-int HBAudioIo::ConvertToPCM(const std::string& msg,
-                               std::unique_ptr<float[]>& pcm_data,
-                               int& pcm_size) {
-  auto err_code = wetts_synthesis(tts_, msg.c_str(), 1, pcm_data_, &pcm_size);
-  if (err_code != ERRCODE_TTS_SUCC) {
-    RCLCPP_ERROR(rclcpp::get_logger("audio_io"), "ConvertToPCM not init.");
-    return -1;
-  }
-
-  pcm_data.reset(new float[pcm_size]);
-  memcpy(pcm_data.get(), pcm_data_, pcm_size * sizeof(float));
-
-  return 0;
-}
 
 
 static bool wait_for_rising_edge(int gpio_num, int timeout_ms = -1) {
@@ -327,7 +341,7 @@ int HBAudioIo::MicphoneGetThread() {
       micphone_lock.unlock();
       if(exiting_ == true) break;
       // digitalWrite(0, HIGH);
-      strip.set_all_same_color(0, 0, 255);
+      
       ret = alsa_device_read(micphone_device_, buffer, frames);
       if (ret <= 0) continue;
       RCLCPP_DEBUG(rclcpp::get_logger("audio_io"), "capture audio buffer_size:%d",
@@ -364,6 +378,7 @@ void HBAudioIo::AudioCmdDataFunc(std::string cmd_word) {
   auto message = std::make_unique<std_msgs::msg::String>();
   message->data = cmd_word;
   asr_msg_publisher_->publish(std::move(message));
+  strip.clear();
 }
 
 void HBAudioIo::AudioASRFunc(std::string asr) {
@@ -374,6 +389,7 @@ void HBAudioIo::AudioASRFunc(std::string asr) {
       message->data = asr;
       RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr publish:%s", asr.c_str());
       asr_msg_publisher_->publish(std::move(message));
+      strip.clear();
     }
     size_t pos = asr.find(wakeup_name_, 0);  
     size_t pos1 = asr.find(wakeup_name_1_, 0);      
@@ -385,6 +401,7 @@ void HBAudioIo::AudioASRFunc(std::string asr) {
         message->data = asr_msg;
         RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr publish:%s", asr_msg.c_str());
         asr_msg_publisher_->publish(std::move(message));
+        strip.clear();
       }
     } else if (pos != std::string::npos) {
       if (pos < (asr.length() - wakeup_name_.length())) {
@@ -394,6 +411,7 @@ void HBAudioIo::AudioASRFunc(std::string asr) {
         message->data = asr_msg;
         RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr publish:%s", asr_msg.c_str());
         asr_msg_publisher_->publish(std::move(message));
+        strip.clear();
       }
     }
   }
@@ -423,66 +441,67 @@ static bool containsChinese(const std::string& str) {
 }
 
 int HBAudioIo::SpeakerThread() {
+  
+  // sherpa_onnx::AlsaPlay alsa(micphone_name_.c_str(), 22050);
   while (rclcpp::ok()) {
+    PlaybackItem item;
+    std::cout<<"+++++++++++++++++++"<<std::endl;
     std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
     playback_queue_cv_.wait(playback_queue_lock, [this] { return !playback_queue_.empty() || exiting_; });
     if(exiting_ == true) break;
-    // digitalWrite(0, LOW);
-    strip.clear();
-    auto pcm_data = std::move(playback_queue_.front().first);
-    auto pcm_size_1 = playback_queue_.front().second;
+
+    item = std::move(playback_queue_.front());
+
     playback_queue_.pop();
     playback_queue_lock.unlock();
 
-    if(pcm_size_1 == -1){
+    if(item.playback == false){
+      std::cout<<"------------mic-------------"<<std::endl;
       std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
       speaker_working_ = false;
       micphone_lock.unlock();
+      strip.set_all_same_color(0, 0, 255);
       micphone_cv_.notify_one();
       continue;
     }
-
-    std::vector<int16_t> pcm_int16;
-    auto pcm_float = pcm_data.get();
-    for (int i = 0; i < pcm_size_1; i++) {
-      pcm_int16.push_back(*pcm_float);
-      pcm_int16.push_back(*pcm_float);
-      pcm_float++;
+    
+    sherpa_onnx::AlsaPlay alsa(micphone_name_.c_str(), item.sample_rate > 0 ? item.sample_rate : sherpa_tts_.tts_ptr_->SampleRate());
+    if (!item.samples.empty()) {
+        alsa.Play(item.samples);
+        // alsa_->Play(item.samples);
     }
-    if (speaker_device_) {
-      snd_pcm_sframes_t frames = snd_pcm_bytes_to_frames(
-          speaker_device_->handle, pcm_int16.size() * sizeof(int16_t));
-      snd_pcm_prepare(speaker_device_->handle);  // 耗时0.1ms
-      alsa_device_write(speaker_device_, pcm_int16.data(), frames);// 讲话
-      snd_pcm_drop(speaker_device_->handle);  // 耗时1ms
-    }
+    // alsa_->Drain();
+    alsa.Drain();
+
+    std::cout<<"=-=-=-==-=--=-=="<<std::endl;
+    // std::this_thread::sleep_for(std::chrono::milliseconds(4000));
 
 
-    // if(!playback_queue_.empty()){
-    //   std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
-    //   speaker_working_ = true;
-    //   micphone_lock.unlock();
-    // }else{
-    //   std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
-    //   speaker_working_ = false;
-    //   micphone_lock.unlock();
-    //   micphone_cv_.notify_one();
-    // }
   }
   return 0;
 }
 
 
 int HBAudioIo::PcmThread() {
-  RCLCPP_WARN(rclcpp::get_logger("audio_io"), "start to speaker audio");
-  if (!speaker_device_) {
-    RCLCPP_ERROR(rclcpp::get_logger("audio_io"), "speaker device is null");
-    return -1;
-  }
+  // RCLCPP_WARN(rclcpp::get_logger("audio_io"), "start to speaker audio");
+  // if (!speaker_device_) {
+  //   RCLCPP_ERROR(rclcpp::get_logger("audio_io"), "speaker device is null");
+  //   return -1;
+  // }
 
   std::unique_ptr<float[]> pcm_data;
   int pcm_size;
+  static bool inited = false;
   while (rclcpp::ok()) {
+    if(inited == false){
+      tts_data_queue_.push("我是来自阿里云的超大规模语言模型，我叫通义千问");
+      tts_data_queue_.push("end");
+      std::cout<<"----------start----------"<<std::endl;
+      std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+      speaker_working_ = true;
+      micphone_lock.unlock();
+      inited = true;
+    }
     std::unique_lock<std::mutex> tts_queue_lock(tts_queue_mtx_);
     tts_queue_cv_.wait(tts_queue_lock, [this] { return !tts_data_queue_.empty() || exiting_;});
     if(exiting_ == true) break;
@@ -490,16 +509,31 @@ int HBAudioIo::PcmThread() {
     tts_data_queue_.pop();
     tts_queue_lock.unlock();
     if(rclcpp::ok()){
+      // std::unique_lock<std::mutex> model_init_lock(model_init_mtx_);
+      // model_init_cv_.wait(model_init_lock, [this] { return model_init_ || exiting_;});
+      std::cout<<"tts_msg_: "<<tts_msg_<<std::endl;
       if (containsChinese(tts_msg_)){
-        auto ret = ConvertToPCM(tts_msg_, pcm_data, pcm_size);
+        // auto ret = ConvertToPCM(tts_msg_, pcm_data, pcm_size);
+        auto audio = sherpa_tts_.tts_ptr_->Generate(tts_msg_, 0, 1.0f, nullptr);
+        PlaybackItem p;
+        p.samples = std::move(audio.samples);
+        p.sample_rate = audio.sample_rate;
+        p.playback = true;
+
         std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
-        playback_queue_.push(std::make_pair(std::move(pcm_data), pcm_size));
+        // playback_queue_.push(std::make_pair(std::move(pcm_data), pcm_size));
+        playback_queue_.push(p);
         playback_queue_lock.unlock();
         playback_queue_cv_.notify_one();
       }
       if(tts_msg_ == "end"){
         std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
-        playback_queue_.push(std::make_pair(std::move(pcm_data), -1));
+        // playback_queue_.push(std::make_pair(std::move(pcm_data), -1));
+
+        PlaybackItem p;
+        p.playback = false;
+
+        playback_queue_.push(p);
         playback_queue_lock.unlock();
         playback_queue_cv_.notify_one();
       }

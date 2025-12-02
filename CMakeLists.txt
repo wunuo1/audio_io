@@ -25,15 +25,8 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
 endif()
 
-#if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-#  add_compile_options(-Wall -Wextra -Wpedantic)
-#endif()
-
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(audio_msg REQUIRED)
@@ -41,15 +34,38 @@ find_package(std_msgs REQUIRED)
 find_package(jsoncpp REQUIRED)
 #find_package(OpenSSL REQUIRED)
 
-find_library(WIRINGPI_LIBRARY wiringPi)
+set(SHERPA_PATH_LIST ${CMAKE_SOURCE_DIR}/sherpa-onnx ${CMAKE_SOURCE_DIR}/sherpa-onnx-master)
+foreach(dir ${SHERPA_PATH_LIST})
+    if(EXISTS "${dir}")
+        set(SHERPA_PATH "${dir}")
+        break()
+    endif()
+endforeach()
+set(CC_PATH ${SHERPA_PATH}/sherpa-onnx/csrc)
+
+
+file(GLOB DEP_INCLUDE_DIRS  
+    ${SHERPA_PATH}/build/_deps/*-src/src/include
+    ${SHERPA_PATH}/build/_deps/*-src/include
+    ${SHERPA_PATH}/build/_deps/*-src
+    ${SHERPA_PATH}/build/_deps/*-src/src
+)
+
+add_definitions(-DSHERPA_ONNX_ENABLE_ALSA=1)
+option(SHERPA_ONNX_ENABLE_TTS "Enable TTS (text-to-speech) support" ON)
 
 include_directories(
   include
   wetts/include
+  ${DEP_INCLUDE_DIRS}
+  ${SHERPA_PATH}
 )
 
 link_directories(
-  wetts/lib
+  #wetts/lib
+  ${SHERPA_PATH}/build/lib
+  ${SHERPA_PATH}/build/_deps/onnxruntime-src/lib
+  ${SHERPA_PATH}/build/lib
 )
 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/SenseVoiceGGUF")
@@ -80,7 +96,7 @@ else()
     endif()
 endif()
 
-option(BUILD_SHARED_LIBS "build shared libraries" ${BUILD_SHARED_LIBS_DEFAULT})
+option(BUILD_SHARED_LIBS "build/shared libraries" ${BUILD_SHARED_LIBS_DEFAULT})
 
 # general
 option(SENSE_VOICE_CCACHE "sense-voice: use ccache if available" ON)
@@ -156,19 +172,44 @@ add_executable(${PROJECT_NAME}
   src/utils/alsa_device.cpp
   src/hb_audio_io.cpp
   src/speech_engine.cpp
+  src/sherpa_tts.cpp
   src/audio_example.cpp
+  ${CC_PATH}/alsa-play.cc
 )
+
+add_executable(test_sh
+  src/utils/alsa_device.cpp
+  src/sherpa_tts.cpp
+  src/test.cpp
+  ${CC_PATH}/alsa-play.cc
+)
+
 
 #set(BASE_LIBRARIES pthread dl rt m)
 set(BASE_LIBRARIES pthread)
 set(X3_AUDIO_LIB asound sense-voice-core ggml-cpu ggml-base ggml jsoncpp)
 
+set(TTS_LIB  sherpa-onnx-core
+  kaldi-native-fbank-core
+  kissfft-float
+  asound
+  fstfar
+  fst
+  sherpa-onnx-kaldifst-core
+  cppinyin_core
+  onnxruntime
+  espeak-ng
+  ucd
+  piper_phonemize
+  pthread)
 
 
 target_link_libraries(${PROJECT_NAME}
-   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES} tts ${WIRINGPI_LIBRARY} pthread
+   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB}
 )
-
+target_link_libraries(test_sh
+   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB}
+)
 ament_target_dependencies(${PROJECT_NAME}
 "rclcpp"
 "geometry_msgs"
@@ -180,10 +221,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
-install(FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/wetts/lib/libtts.so
-  ${CMAKE_CURRENT_SOURCE_DIR}/wetts/lib/libonnxruntime.so.1.11.1
-  DESTINATION lib/)
+#install(FILES
+#  ${CMAKE_CURRENT_SOURCE_DIR}/wetts/lib/libtts.so
+#  ${CMAKE_CURRENT_SOURCE_DIR}/wetts/lib/libonnxruntime.so.1.11.1
+#  DESTINATION lib/)
 
 # Install libraries
 install(DIRECTORY include/sensevoice/lib
