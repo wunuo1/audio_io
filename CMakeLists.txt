@@ -56,13 +56,11 @@ option(SHERPA_ONNX_ENABLE_TTS "Enable TTS (text-to-speech) support" ON)
 
 include_directories(
   include
-  wetts/include
   ${DEP_INCLUDE_DIRS}
   ${SHERPA_PATH}
 )
 
 link_directories(
-  #wetts/lib
   ${SHERPA_PATH}/build/lib
   ${SHERPA_PATH}/build/_deps/onnxruntime-src/lib
   ${SHERPA_PATH}/build/lib
@@ -174,14 +172,14 @@ add_executable(${PROJECT_NAME}
   src/speech_engine.cpp
   src/sherpa_tts.cpp
   src/audio_example.cpp
-  ${CC_PATH}/alsa-play.cc
+  src/sherap_tts/alsa-play-new.cc
 )
 
 add_executable(test_sh
   src/utils/alsa_device.cpp
   src/sherpa_tts.cpp
   src/test.cpp
-  ${CC_PATH}/alsa-play.cc
+  src/sherap_tts/alsa-play-new.cc
 )
 
 
@@ -208,7 +206,7 @@ target_link_libraries(${PROJECT_NAME}
    ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB}
 )
 target_link_libraries(test_sh
-   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB}
+   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB} gpiod
 )
 ament_target_dependencies(${PROJECT_NAME}
 "rclcpp"
@@ -220,11 +218,6 @@ ament_target_dependencies(${PROJECT_NAME} audio_msg)
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-
-#install(FILES
-#  ${CMAKE_CURRENT_SOURCE_DIR}/wetts/lib/libtts.so
-#  ${CMAKE_CURRENT_SOURCE_DIR}/wetts/lib/libonnxruntime.so.1.11.1
-#  DESTINATION lib/)
 
 # Install libraries
 install(DIRECTORY include/sensevoice/lib

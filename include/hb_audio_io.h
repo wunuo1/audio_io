@@ -31,7 +31,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "utils/alsa_device.h"
-#include "tts_api.h"
 #include "WS2812B.h"
 #include "sherpa_tts.h"
 
@@ -53,13 +52,14 @@ class HBAudioIo : public rclcpp::Node {
   int DeInit();
   int Start();
   int Stop();
-  // void LoadTtsModelAsync(const std::string& tros_distro);
+  void LoadTtsModelAsync();
  private:
   int MicphoneGetThread();
   int SpeakerThread();
   int PcmThread();
   void asr_send_th();
   void TTSMsgCallback(const std_msgs::msg::String::SharedPtr msg);
+  void CheckLLMNodeExistence();
   void AudioCmdDataFunc(std::string cmd_word);
   void AudioASRFunc(std::string asr);
   // int ConvertToPCM(const std::string& msg,
@@ -73,7 +73,7 @@ class HBAudioIo : public rclcpp::Node {
   alsa_device_t* speaker_device_ = nullptr;
   bool exit_ = true;
   bool is_init_ = false;
-  bool model_init_ = false;
+  bool llm_node_init_ = false;
   int audio_num_ = 0;
   std::string micphone_name_ = "plughw:0,0";
   int micphone_rate_ = 16000;
@@ -112,15 +112,15 @@ class HBAudioIo : public rclcpp::Node {
   std::mutex tts_queue_mtx_;
   std::mutex micphone_mtx_;
   std::mutex playback_queue_mtx_;
-  std::mutex model_init_mtx_;
+  std::mutex llm_node_init_mtx_;
 
   std::condition_variable start_all_cv_;
   std::condition_variable tts_queue_cv_;
   std::condition_variable micphone_cv_;
   std::condition_variable playback_queue_cv_;
-  std::condition_variable model_init_cv_;
+  std::condition_variable llm_node_init_cv_;
 
-  bool speaker_working_ = false;
+  bool speaker_working_ = true;
   bool exiting_ = false;
   std::string tts_msg_ = "";
   std::queue<std::string> tts_data_queue_;
@@ -131,6 +131,7 @@ class HBAudioIo : public rclcpp::Node {
   SherpaTTS sherpa_tts_;
   std::shared_ptr<sherpa_onnx::AlsaPlay> alsa_ = nullptr;
   bool start_run_ = false;
+  rclcpp::TimerBase::SharedPtr timer_;
 };
 
 }  // namespace audio

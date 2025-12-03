@@ -1,4 +1,6 @@
 #include "sherpa_tts.h"
+#include <chrono>
+#include <iostream>
 
 SherpaTTS::SherpaTTS(): po_(""){
 }
@@ -13,9 +15,7 @@ static std::string GetProgramPath() {
 }
 
 void SherpaTTS::Init(std::string &device_name, std::string &config_path){
-    // std::string config_path = "/root/TTS/matcha-icefall-zh-baker";
     sherpa_onnx::ParseOptions po_("");
-    // std::string device_name = "default";
     int32_t sid = 0;
     po_.Register("device-name", &device_name, "ALSA playback device name");
     po_.Register("sid", &sid, "Speaker ID");
@@ -23,7 +23,7 @@ void SherpaTTS::Init(std::string &device_name, std::string &config_path){
     config.Register(&po_);
     std::string name = GetProgramPath();
     std::vector<std::string> args = {
-        name, // argv[0]
+        name,
         "--num-threads=4",
         "--matcha-acoustic-model=" + config_path + "/model-steps-3.onnx",
         "--matcha-vocoder=/root/TTS/vocos-22khz-univ.onnx",
@@ -40,8 +40,8 @@ void SherpaTTS::Init(std::string &device_name, std::string &config_path){
         argv2.push_back(const_cast<char*>(s.c_str()));
     }
     int argc2 = static_cast<int>(argv2.size());
+
     po_.Read(argc2, argv2.data());
-    
 
     if (!config.Validate()) {
         std::cerr << "Invalid config!\n";
