@@ -173,12 +173,12 @@ int HBAudioIo::Init() {
   timer_ = this->create_wall_timer(std::chrono::duration<double>(1.0), std::bind(&HBAudioIo::CheckLLMNodeExistence, this));
   is_init_ = true;
 
-  for(int i = 0; i < 3; i++){
-    strip.clear();
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    strip.set_all_same_color(0, 0, 255);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  }
+  // for(int i = 0; i < 3; i++){
+  //   strip.clear();
+  //   std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  //   strip.set_all_same_color(0, 0, 255);
+  //   std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  // }
   return 0;
 }
 
@@ -324,9 +324,16 @@ int HBAudioIo::MicphoneGetThread() {
 }
 
 void HBAudioIo::AudioCmdDataFunc(std::string cmd_word) {
+
   //唤醒词设置
-  if (cmd_word == "你好" || cmd_word == "开始对话") publish_ = true;
+  if (cmd_word == "你好" || cmd_word == "开始对话"){
+    std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
+    publish_ = true;
+    llm_node_init_lock.unlock();
+  }
+  
   if (publish_ == true){
+    strip.clear();
     RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
     audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
     frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
@@ -337,10 +344,16 @@ void HBAudioIo::AudioCmdDataFunc(std::string cmd_word) {
     asr_msg_publisher_->publish(std::move(message));
   }
   //休眠词设置
-  if (cmd_word == "再见" || cmd_word == "结束对话" || cmd_word == "拜拜") publish_ = false;
-  strip.clear();
+  if (cmd_word == "再见" || cmd_word == "结束对话" || cmd_word == "拜拜") {
+    std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
+    publish_ = false;
+    llm_node_init_lock.unlock();
+    strip.set_all_same_color(0, 0, 20);
+  }
+  
 }
 
+//以下函数未调用
 void HBAudioIo::AudioASRFunc(std::string asr) {
   if (asr.length() > 0) {
     RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr msg:%s", asr.c_str());
@@ -477,7 +490,8 @@ int HBAudioIo::SpeakerThread() {
       std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
       speaker_working_ = false;
       micphone_lock.unlock();
-      strip.set_all_same_color(0, 0, 255);
+      if (publish_ == false) strip.set_all_same_color(0, 0, 20);
+      else strip.set_all_same_color(0, 0, 255);
       micphone_cv_.notify_one();
       continue;
     }
@@ -502,20 +516,22 @@ void HBAudioIo::CheckLLMNodeExistence()
   bool exists_now = current_nodes.find(target_node_name) != current_nodes.end();
   bool existed_before = observed_nodes.find(target_node_name) != observed_nodes.end();
 
-  // 节点上线
+  // 大模型节点上线，上线后重置publish标志
   if (exists_now && !existed_before) {
       RCLCPP_WARN(this->get_logger(), "Node '%s' has come online!", target_node_name.c_str());
       std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
       llm_node_init_ = true;
+      publish_ = true;
       llm_node_init_lock.unlock();
       llm_node_init_cv_.notify_all();
   }
 
-  // 节点下线
+  // 大模型节点下线
   if (!exists_now && existed_before) {
       RCLCPP_WARN(this->get_logger(), "Node '%s' has gone offline!", target_node_name.c_str());
       std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
       llm_node_init_ = false;
+      publish_ = false;
       llm_node_init_lock.unlock();
       llm_node_init_cv_.notify_all();
   }
