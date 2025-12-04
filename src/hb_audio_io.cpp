@@ -324,14 +324,20 @@ int HBAudioIo::MicphoneGetThread() {
 }
 
 void HBAudioIo::AudioCmdDataFunc(std::string cmd_word) {
-  RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
-  audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
-  frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
-  frame->cmd_word = cmd_word;
-  msg_publisher_->publish(std::move(frame));
-  auto message = std::make_unique<std_msgs::msg::String>();
-  message->data = cmd_word;
-  asr_msg_publisher_->publish(std::move(message));
+  //唤醒词设置
+  if (cmd_word == "你好" || cmd_word == "开始对话") publish_ = true;
+  if (publish_ == true){
+    RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
+    audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
+    frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
+    frame->cmd_word = cmd_word;
+    // msg_publisher_->publish(std::move(frame));
+    auto message = std::make_unique<std_msgs::msg::String>();
+    message->data = cmd_word;
+    asr_msg_publisher_->publish(std::move(message));
+  }
+  //休眠词设置
+  if (cmd_word == "再见" || cmd_word == "结束对话" || cmd_word == "拜拜") publish_ = false;
   strip.clear();
 }
 
@@ -409,6 +415,7 @@ int HBAudioIo::PcmThread() {
     //   micphone_lock.unlock();
     //   inited = true;
     // }
+    
     // 等待大模型节点启动
     std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
     llm_node_init_cv_.wait(llm_node_init_lock, [this] { return llm_node_init_ || exiting_;});

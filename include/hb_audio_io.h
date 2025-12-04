@@ -122,6 +122,7 @@ class HBAudioIo : public rclcpp::Node {
 
   bool speaker_working_ = true;
   bool exiting_ = false;
+  bool publish_ = true;
   std::string tts_msg_ = "";
   std::queue<std::string> tts_data_queue_;
   rclcpp::Publisher<audio_msg::msg::SmartAudioData>::SharedPtr msg_publisher_;

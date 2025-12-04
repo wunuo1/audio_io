@@ -386,22 +386,22 @@ void speech_engine::process(void) {
 
           audio_cmd_cb_(tmp_str); //todo
 
-          size_t pos = tmp_str.find(wakeup_name_, 0);
-          if (pos != std::string::npos) {
-            if (audio_asr_cb_) {
-              audio_asr_cb_(wakeup_name_); //todo
-            }
-          }
-          result_str += tmp_str + ",";
-          std::cout << "result_str:" << result_str << std::endl;
+          // size_t pos = tmp_str.find(wakeup_name_, 0);
+          // if (pos != std::string::npos) {
+          //   if (audio_asr_cb_) {
+          //     audio_asr_cb_(wakeup_name_); //todo
+          //   }
+          // }
+          // result_str += tmp_str + ",";
+          // std::cout << "result_str:" << result_str << std::endl;
         }
-        if (end_flag) {
-          if (audio_asr_cb_) {
-            audio_asr_cb_(result_str); //todo
-          }
-          std::cout << "result_str:" << result_str << std::endl;
-          result_str.clear();
-        }
+        // if (end_flag) {
+        //   if (audio_asr_cb_) {
+        //     audio_asr_cb_(result_str); //todo
+        //   }
+        //   std::cout << "result_str:" << result_str << std::endl;
+        //   result_str.clear();
+        // }
 
       }
     }
