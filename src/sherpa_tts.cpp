@@ -26,7 +26,7 @@ void SherpaTTS::Init(std::string &device_name, std::string &config_path){
         name,
         "--num-threads=4",
         "--matcha-acoustic-model=" + config_path + "/model-steps-3.onnx",
-        "--matcha-vocoder=/root/TTS/vocos-22khz-univ.onnx",
+        "--matcha-vocoder=" + config_path + "/vocos-22khz-univ.onnx",
         "--matcha-lexicon=" + config_path + "/lexicon.txt",
         "--matcha-tokens=" + config_path + "/tokens.txt",
         "--matcha-dict-dir=" + config_path + "/dict",

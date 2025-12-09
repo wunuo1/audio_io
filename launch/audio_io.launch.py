@@ -26,7 +26,7 @@ def generate_launch_description():
             description='audio capture id'),
         DeclareLaunchArgument(
             'asr_pub_topic_name',
-            default_value='/llamacpp_prompt',
+            default_value='/prompt_text',
             description='hobot audio publish topic name'),
         DeclareLaunchArgument(
             'audio_asr_model',
@@ -51,7 +51,9 @@ def generate_launch_description():
                 {"push_wakeup": LaunchConfiguration('push_wakeup')},
                 {"wakeup_name": LaunchConfiguration('wakeup_name')},
                 {"asr_pub_topic_name": LaunchConfiguration(
-                    'asr_pub_topic_name')}
+                    'asr_pub_topic_name'),
+                "tts_config_path": "/userdata/MagicBox/dep/matcha-icefall-zh-baker",
+                "asr_model_path": "/userdata/MagicBox/config/"}
             ],
             arguments=['--ros-args', '--log-level', 'warn']
         )
