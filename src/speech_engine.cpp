@@ -251,6 +251,7 @@ int speech_engine::Stop() {
 
 void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
   if (data->size() == 0) return;
+  std::lock_guard<std::mutex> lock(mutex);
   int size = data->size();
   std::vector<float> chunk;
   chunk.resize(2 * SENSE_VOICE_VAD_CHUNK_PAD_SIZE + size);
@@ -265,16 +266,17 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
   memcpy((char *)vad_pad.data(), (char *)(chunk.data() + (context_size - SENSE_VOICE_VAD_CHUNK_PAD_SIZE)), SENSE_VOICE_VAD_CHUNK_PAD_SIZE * sizeof(float));
   float speech_prob = 0;
   silero_vad_encode_internal(*ctx, *ctx->state, chunk, params.n_threads, speech_prob);
+  
   if (triggered) {
     if (speech_prob < params.neg_threshold) {
       vad_stop = std::chrono::system_clock::now();
       auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_pre).count();
       auto interval1 = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_send).count();
       auto interval2 = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_start).count();
-      if (interval >= 98) {
+      if (interval >= 500) {
         //std::cout << "send_data--------disable" << std::endl;
         if ((interval2 > params.min_speech_duration_ms) && (vad_data_ptr)) {
-          std::lock_guard<std::mutex> lock(mutex);
+          // std::lock_guard<std::mutex> lock(mutex);
           if (process_queue.size() >= kMaxQueueSize) {
             process_queue.pop();
           }
@@ -300,7 +302,7 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
       vad_pre = std::chrono::system_clock::now();
       auto interval2 = std::chrono::duration_cast<std::chrono::milliseconds>(vad_pre - vad_send).count();
       if (interval2 >= params.max_speech_duration_ms) {
-        std::lock_guard<std::mutex> lock(mutex);
+        // std::lock_guard<std::mutex> lock(mutex);
         if (process_queue.size() >= kMaxQueueSize) {
           process_queue.pop();
         }
@@ -310,6 +312,7 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
         vad_send = vad_pre;
       }
     }
+
 
   } else if (speech_prob >= params.threshold) {
     vad_pre = vad_send = vad_start = std::chrono::system_clock::now();
@@ -329,7 +332,7 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
       if (interval >= 1 * 1000) {
         asr_final = false;
         auto temp_ptr = std::make_shared<std::vector<double>>();
-        std::lock_guard<std::mutex> lock(mutex);
+        // std::lock_guard<std::mutex> lock(mutex);
         if (process_queue.size() >= kMaxQueueSize) {
           process_queue.pop();
         }
@@ -345,10 +348,8 @@ void speech_engine::process(void) {
   try {
     std::string result_str;
     while (true) {
-      {
-        std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock, [this] { return !process_queue.empty() || stop_flag; });
-      }
+      std::unique_lock<std::mutex> lock(mutex);
+      cv.wait(lock, [this] { return !process_queue.empty() || stop_flag; });
       if (stop_flag) {
         break;
       }
@@ -358,6 +359,7 @@ void speech_engine::process(void) {
         process_queue.pop();
         //std::vector<double> speech_segment;
         if (data->size() > 0) {
+          
           auto start_time = std::chrono::system_clock::now();
           if (sense_voice_full_parallel(ctx, wparams, *data, data->size(), params.n_processors) != 0) {
               fprintf(stderr, "failed to process audio\n");
@@ -383,8 +385,13 @@ void speech_engine::process(void) {
           //   }
 
           // }
-
           audio_cmd_cb_(tmp_str); //todo
+
+          // //清空process_queue
+          // while (!process_queue.empty()){
+          //   std::cout<<"process_queue: "<<std::endl;
+          //   process_queue.pop();
+          // }
 
           // size_t pos = tmp_str.find(wakeup_name_, 0);
           // if (pos != std::string::npos) {

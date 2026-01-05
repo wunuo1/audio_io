@@ -120,7 +120,7 @@ class HBAudioIo : public rclcpp::Node {
   std::condition_variable playback_queue_cv_;
   std::condition_variable llm_node_init_cv_;
 
-  bool speaker_working_ = true;
+  bool micphone_stop_ = true;
   bool exiting_ = false;
   bool publish_ = true;
   std::string tts_msg_ = "";
@@ -128,7 +128,7 @@ class HBAudioIo : public rclcpp::Node {
   rclcpp::Publisher<audio_msg::msg::SmartAudioData>::SharedPtr msg_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr asr_msg_publisher_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr tts_msg_subscriber_;
-  WS2812B strip;
+  WS2812B lamp;
   SherpaTTS sherpa_tts_;
   std::shared_ptr<sherpa_onnx::AlsaPlay> alsa_ = nullptr;
   bool start_run_ = false;
