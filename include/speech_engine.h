@@ -12,9 +12,9 @@
 
 #include "sense-voice.h"
 #include "silero-vad.h"
+#include "sherpa_kws.h"
 
-using AudioASRFunc = std::function<void(std::string)>;
-using AudioCmdDataFunc = std::function<void(std::string)>;
+using ASRCallBackFunc = std::function<void(std::string, std::string)>;
 
 
 // /**
@@ -99,9 +99,7 @@ class speech_engine {
     return engine;
   }
   ~speech_engine(){}
-  int Init(const std::string &cfg_path, const std::string &wakeup_name,
-          std::shared_ptr<std::vector<std::string>> v_cmd_word,
-          AudioASRFunc asr_func, AudioCmdDataFunc cmd_func);
+  int Init(const std::string &cfg_path, const std::string &kws_cfg_path, std::shared_ptr<std::vector<std::string>> v_cmd_word, ASRCallBackFunc cmd_func);
   int DeInit();
   int Start();
   int Stop();
@@ -110,7 +108,7 @@ class speech_engine {
   void process(void);
 
  private:
-  speech_engine(){}
+  speech_engine():sherpa_kws_(){}
   speech_engine(const speech_engine &);
   speech_engine &operator=(const speech_engine &);
 
@@ -136,15 +134,14 @@ class speech_engine {
   bool enable_asr = true;
   bool asr_final = false;
   std::mutex web_mutex;
-  std::string wakeup_name_;
-  AudioASRFunc audio_asr_cb_ = nullptr;
-  AudioASRFunc audio_cmd_cb_ = nullptr;
+  ASRCallBackFunc asr_data_cb_ = nullptr;
   std::shared_ptr<std::vector<std::string>> v_cmd_word_;
 
   std::chrono::system_clock::time_point vad_start;
   std::chrono::system_clock::time_point vad_pre;
   std::chrono::system_clock::time_point vad_send;
   std::chrono::system_clock::time_point vad_stop;
+  SherpaKWS sherpa_kws_;
 };
 
 #endif

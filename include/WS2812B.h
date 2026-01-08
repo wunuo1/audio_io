@@ -6,6 +6,8 @@
 #include <linux/spi/spidev.h>
 #include <cstring>
 #include <array>
+#include <thread>
+#include <chrono>
 
 class WS2812B {
 public:
@@ -47,8 +49,17 @@ public:
         show();
     }
 
+    void blink_blue(const int& time){
+        for(int i = 0; i < time; i++){
+            clear();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            set_all_same_color(0, 0, 255);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
     void clear() {
-        set_all_same_color(0,0,0);
+        set_all_same_color(0, 0, 0);
     }
 
     void show() {

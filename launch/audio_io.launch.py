@@ -13,13 +13,16 @@
 # limitations under the License.
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     return LaunchDescription([
+        SetEnvironmentVariable(
+            'RMW_IMPLEMENTATION', 'rmw_cyclonedds_cpp'
+        ),
         DeclareLaunchArgument(
             'micphone_name',
             default_value='plughw:0,0',
@@ -50,10 +53,11 @@ def generate_launch_description():
                 {"asr_model": LaunchConfiguration('audio_asr_model')},
                 {"push_wakeup": LaunchConfiguration('push_wakeup')},
                 {"wakeup_name": LaunchConfiguration('wakeup_name')},
-                {"asr_pub_topic_name": LaunchConfiguration(
-                    'asr_pub_topic_name'),
+                {"asr_pub_topic_name": LaunchConfiguration('asr_pub_topic_name'),
                 "tts_config_path": "/userdata/MagicBox/dep/matcha-icefall-zh-baker",
-                "asr_model_path": "/userdata/MagicBox/config/"}
+                "asr_model_path": "/userdata/MagicBox/config/",
+                "kws_config_path": "/userdata/MagicBox/dep/sherpa-onnx",
+                "continuous_wake_mode": False}
             ],
             arguments=['--ros-args', '--log-level', 'warn']
         )

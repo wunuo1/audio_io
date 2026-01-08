@@ -33,6 +33,7 @@
 #include "utils/alsa_device.h"
 #include "WS2812B.h"
 #include "sherpa_tts.h"
+#include "std_srvs/srv/trigger.hpp"
 
 namespace hobot {
 namespace audio {
@@ -56,24 +57,20 @@ class HBAudioIo : public rclcpp::Node {
  private:
   int MicphoneGetThread();
   int SpeakerThread();
-  int PcmThread();
+  int TTSThread();
   void asr_send_th();
   void TTSMsgCallback(const std_msgs::msg::String::SharedPtr msg);
   void CheckLLMNodeExistence();
-  void AudioCmdDataFunc(std::string cmd_word);
+  void PubASRDataFunc(std::string cmd_word, std::string key_word);
   void AudioASRFunc(std::string asr);
-  // int ConvertToPCM(const std::string& msg,
-  //                              std::unique_ptr<float[]>& pcm_data,
-  //                              int& pcm_size);
+  void StatusServiceHandle(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+      std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
  private:
   int micphone_enable_ = 1;
   std::shared_ptr<std::thread> micphone_thread_;
   alsa_device_t* micphone_device_ = nullptr;
   alsa_device_t* speaker_device_ = nullptr;
-  bool exit_ = true;
-  bool is_init_ = false;
-  bool llm_node_init_ = false;
   int audio_num_ = 0;
   std::string micphone_name_ = "plughw:0,0";
   int micphone_rate_ = 16000;
@@ -85,49 +82,51 @@ class HBAudioIo : public rclcpp::Node {
   int mic_type_ = 0;
   int asr_output_mode_ = 0;
   int asr_output_channel_ = 3;
-  int push_wakeup_ = 0;
 
-  std::string wakeup_name_ = "你好";
-  std::string wakeup_name_1_ = "你好,";
   std::string config_path_ = "./config";
   // audio_sdk_path_ will be updated at runtime with env "TROS_DISTRO"
   std::string asr_model_ = "sense-voice-small-fp16.gguf";
   std::string asr_model_path_ = "";
+  std::string kws_config_path_ = "/userdata/MagicBox/dep/sherpa-onnx";
   std::string audio_pub_topic_name_ = "/audio_smart";
   std::string asr_pub_topic_name_ = "/prompt_text";
   std::string tts_sub_topic_name_ = "/tts_text";
   std::string tts_config_path_ = "./matcha-icefall-zh-baker";
   std::ofstream audio_infile_;
   std::ofstream audio_sdk_;
-  
+  bool continuous_wake_mode_ = false; 
   bool save_audio_ = false;
   void* tts_ = nullptr;
   char* pcm_data_ = nullptr;
-  // std::queue<std::pair<std::unique_ptr<float[]>, int>> playback_queue_;
   std::queue<PlaybackItem> playback_queue_;
   std::shared_ptr<std::vector<std::string>> v_cmd_word_;
   std::string cmd_word_path_ = "./config/cmd_word.json";
 
-  std::mutex start_all_mtx_;
   std::mutex tts_queue_mtx_;
   std::mutex micphone_mtx_;
   std::mutex playback_queue_mtx_;
   std::mutex llm_node_init_mtx_;
 
-  std::condition_variable start_all_cv_;
   std::condition_variable tts_queue_cv_;
   std::condition_variable micphone_cv_;
   std::condition_variable playback_queue_cv_;
   std::condition_variable llm_node_init_cv_;
 
+  bool llm_node_init_ = false;
   bool micphone_stop_ = true;
+  std::atomic<bool> publish_{true};
+
+  bool exit_ = true;
+  bool is_init_ = false;
   bool exiting_ = false;
-  bool publish_ = true;
+
+
   std::string tts_msg_ = "";
   std::queue<std::string> tts_data_queue_;
   rclcpp::Publisher<audio_msg::msg::SmartAudioData>::SharedPtr msg_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr asr_msg_publisher_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr tts_msg_subscriber_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr status_service_;
   WS2812B lamp;
   SherpaTTS sherpa_tts_;
   std::shared_ptr<sherpa_onnx::AlsaPlay> alsa_ = nullptr;

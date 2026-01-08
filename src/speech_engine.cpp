@@ -156,14 +156,10 @@ void sense_voice_free(struct sense_voice_context * ctx) {
 }
 
 
-int speech_engine::Init(const std::string &cfg_path, const std::string &wakeup_name,
-                        std::shared_ptr<std::vector<std::string>> v_cmd_word,
-                        AudioASRFunc asr_func, AudioCmdDataFunc cmd_func) {
+int speech_engine::Init(const std::string &cfg_path, const std::string &kws_cfg_path, std::shared_ptr<std::vector<std::string>> v_cmd_word, ASRCallBackFunc cmd_func) {
   v_cmd_word_ = v_cmd_word;
-  audio_asr_cb_ = asr_func;
-  audio_cmd_cb_ = cmd_func;
+  asr_data_cb_ = cmd_func;
   params.model = cfg_path;
-  wakeup_name_ = wakeup_name;
   vad_pad.resize(64, 0.0f);
   vad_mute.clear();
   struct sense_voice_context_params cparams;
@@ -222,6 +218,9 @@ int speech_engine::Init(const std::string &cfg_path, const std::string &wakeup_n
   ggml_set_zero(ctx->state->vad_lstm_hidden_state);
 
   fprintf(stdout, "hrsc init success ! \n");
+
+  sherpa_kws_.Init(kws_cfg_path, false);
+
   return 0;
 }
 
@@ -257,7 +256,7 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
   chunk.resize(2 * SENSE_VOICE_VAD_CHUNK_PAD_SIZE + size);
   memcpy((char *)chunk.data(), (char *)vad_pad.data(), SENSE_VOICE_VAD_CHUNK_PAD_SIZE * sizeof(float));
   for (int i = 0; i < size; i++) {
-    chunk[i + SENSE_VOICE_VAD_CHUNK_PAD_SIZE] = (float)(data->at(i) / 32768);
+    chunk[i + SENSE_VOICE_VAD_CHUNK_PAD_SIZE] = (float)(data->at(i) / 32768.f);
   }
   int context_size = SENSE_VOICE_VAD_CHUNK_PAD_SIZE + size;
   for (int j = context_size; j < chunk.size(); j++) {
@@ -271,7 +270,6 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
     if (speech_prob < params.neg_threshold) {
       vad_stop = std::chrono::system_clock::now();
       auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_pre).count();
-      auto interval1 = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_send).count();
       auto interval2 = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_start).count();
       if (interval >= 500) {
         //std::cout << "send_data--------disable" << std::endl;
@@ -346,7 +344,11 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
 
 void speech_engine::process(void) {
   try {
-    std::string result_str;
+    //获取关键词列表
+    std::vector<std::string> key_words_list;
+    if(!sherpa_kws_.ExtractChineseFromFile(key_words_list)){
+      return;
+    }
     while (true) {
       std::unique_lock<std::mutex> lock(mutex);
       cv.wait(lock, [this] { return !process_queue.empty() || stop_flag; });
@@ -359,7 +361,6 @@ void speech_engine::process(void) {
         process_queue.pop();
         //std::vector<double> speech_segment;
         if (data->size() > 0) {
-          
           auto start_time = std::chrono::system_clock::now();
           if (sense_voice_full_parallel(ctx, wparams, *data, data->size(), params.n_processors) != 0) {
               fprintf(stderr, "failed to process audio\n");
@@ -378,38 +379,36 @@ void speech_engine::process(void) {
               tmp_str += ctx->vocab.id_to_token[id];
             }
           }
-          // for (auto& cmd : *v_cmd_word_) {
-          //   if (tmp_str == cmd) {
-          //     audio_cmd_cb_(tmp_str); //todo
-          //     break;
-          //   }
 
-          // }
-          audio_cmd_cb_(tmp_str); //todo
+          //关键词检测处理
+          std::string key_word_sherpa = "";
+          std::string key_word_match_tmp = "";
+          std::string key_word = "";
 
-          // //清空process_queue
-          // while (!process_queue.empty()){
-          //   std::cout<<"process_queue: "<<std::endl;
-          //   process_queue.pop();
-          // }
+          //使用sherpa-kws检测
+          std::vector<float> dst(data->size());
+          for (size_t i = 0; i < data->size(); ++i) {
+              dst[i] = static_cast<float>((*data)[i] / 32768.f);
+          }
+          key_word_sherpa = sherpa_kws_.GetKeyWord(dst);
 
-          // size_t pos = tmp_str.find(wakeup_name_, 0);
-          // if (pos != std::string::npos) {
-          //   if (audio_asr_cb_) {
-          //     audio_asr_cb_(wakeup_name_); //todo
-          //   }
-          // }
-          // result_str += tmp_str + ",";
-          // std::cout << "result_str:" << result_str << std::endl;
+          //使用文字匹配检测
+          for(const auto &kw : key_words_list){
+            if (tmp_str.find(kw) != std::string::npos){
+              key_word_match_tmp = kw;
+              break;
+            }
+          }
+          
+          if(key_word_match_tmp != "" || key_word_sherpa != ""){
+            key_word = (key_word_match_tmp != "") ? key_word_match_tmp : key_word_sherpa;
+          } else {
+            std::cout<<"Key word not found"<<std::endl;
+          }
+
+
+          asr_data_cb_(tmp_str, key_word); //todo
         }
-        // if (end_flag) {
-        //   if (audio_asr_cb_) {
-        //     audio_asr_cb_(result_str); //todo
-        //   }
-        //   std::cout << "result_str:" << result_str << std::endl;
-        //   result_str.clear();
-        // }
-
       }
     }
   } catch(...) {

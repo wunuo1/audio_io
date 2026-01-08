@@ -32,7 +32,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(audio_msg REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(jsoncpp REQUIRED)
-#find_package(OpenSSL REQUIRED)
+find_package(std_srvs REQUIRED)
 
 set(SHERPA_PATH_LIST ${CMAKE_SOURCE_DIR}/sherpa-onnx ${CMAKE_SOURCE_DIR}/sherpa-onnx-master)
 foreach(dir ${SHERPA_PATH_LIST})
@@ -170,17 +170,18 @@ add_executable(${PROJECT_NAME}
   src/utils/alsa_device.cpp
   src/hb_audio_io.cpp
   src/speech_engine.cpp
-  src/sherpa_tts.cpp
   src/audio_example.cpp
+  src/sherap_tts/sherpa_tts.cpp
   src/sherap_tts/alsa-play-new.cc
+  src/sherpa_kws.cpp
 )
 
-add_executable(test_sh
-  src/utils/alsa_device.cpp
-  src/sherpa_tts.cpp
-  src/test.cpp
-  src/sherap_tts/alsa-play-new.cc
-)
+#add_executable(test_sh
+#  src/utils/alsa_device.cpp
+#  src/test.cpp
+#  src/sherap_tts/sherpa_tts.cpp
+#  src/sherap_tts/alsa-play-new.cc
+#)
 
 
 #set(BASE_LIBRARIES pthread dl rt m)
@@ -203,17 +204,13 @@ set(TTS_LIB  sherpa-onnx-core
 
 
 target_link_libraries(${PROJECT_NAME}
-   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB}
+   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB} kaldi-decoder-core ssentencepiece_core
 )
-target_link_libraries(test_sh
-   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB} gpiod
-)
-ament_target_dependencies(${PROJECT_NAME}
-"rclcpp"
-"geometry_msgs"
-"audio_msg")
+#target_link_libraries(test_sh
+#   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB} gpiod
+#)
 
-ament_target_dependencies(${PROJECT_NAME} audio_msg)
+ament_target_dependencies(${PROJECT_NAME} rclcpp geometry_msgs audio_msg std_srvs)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

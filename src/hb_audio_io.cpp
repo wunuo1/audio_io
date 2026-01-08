@@ -55,14 +55,9 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
   
   std::string tros_distro
       = std::string(std::getenv("TROS_DISTRO")? std::getenv("TROS_DISTRO") : "");
-  // asr_model_path_ = "/opt/tros/" + tros_distro + "/lib/sensevoice_ros2/model/";
-  //asr_model_path_ = "./install/lib/audio_io/model/";
-  
-
 
   asr_model_path_ = "/root/";
   cmd_word_path_ = "/opt/tros/" + tros_distro + "/lib/sensevoice_ros2/config/cmd_word.json";
-  //cmd_word_path_ = "./install/lib/audio_io/config/cmd_word.json";
 
   this->declare_parameter<std::string>("micphone_name",
                                        micphone_name_);
@@ -72,16 +67,16 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                        asr_pub_topic_name_);
   this->declare_parameter<std::string>("asr_model",
                                        asr_model_);
-  this->declare_parameter<int>("push_wakeup",
-                                       push_wakeup_);
-  this->declare_parameter<std::string>("wakeup_name",
-                                       wakeup_name_);
   this->declare_parameter<std::string>("tts_sub_topic_name",
                                        tts_sub_topic_name_);
   this->declare_parameter<std::string>("tts_config_path",
                                        tts_config_path_);
   this->declare_parameter<std::string>("asr_model_path",
                                        asr_model_path_);
+  this->declare_parameter<std::string>("kws_config_path",
+                                       kws_config_path_);
+  this->declare_parameter<bool>("continuous_wake_mode",
+                                       continuous_wake_mode_);
 
   this->get_parameter<std::string>("micphone_name",
                                    micphone_name_);
@@ -91,25 +86,22 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                    asr_pub_topic_name_);
   this->get_parameter<std::string>("asr_model",
                                    asr_model_);
-  this->get_parameter<int>("push_wakeup",
-                                   push_wakeup_);
-  this->get_parameter<std::string>("wakeup_name",
-                                   wakeup_name_);
   this->get_parameter<std::string>("tts_sub_topic_name",
                                    tts_sub_topic_name_);
   this->get_parameter<std::string>("tts_config_path",
                                    tts_config_path_);
   this->get_parameter<std::string>("asr_model_path",
                                    asr_model_path_);
+  this->get_parameter<std::string>("kws_config_path",
+                                   kws_config_path_);
+  this->get_parameter<bool>("continuous_wake_mode",
+                                   continuous_wake_mode_);
   
   // std::thread loader([this]() {
   //       this->LoadTtsModelAsync();
   //   });
   // loader.detach();
   
-  if (wakeup_name_.length() > 0) {
-    wakeup_name_1_ = wakeup_name_ + ",";
-  }
   int err_code = 0;
   
   asr_model_path_ += asr_model_;
@@ -119,8 +111,7 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
      << "\n audio_pub_topic_name: " << audio_pub_topic_name_
      << "\n asr_pub_topic_name: " << asr_pub_topic_name_
      << "\n asr_model_path_: " << asr_model_path_
-     << "\n tts_sub_topic_name: " << tts_sub_topic_name_
-     << "\n push_wakeup: " << push_wakeup_;
+     << "\n tts_sub_topic_name: " << tts_sub_topic_name_;
   RCLCPP_WARN(rclcpp::get_logger("audio_io"), "%s", ss.str().c_str());
 }
 
@@ -180,11 +171,8 @@ int HBAudioIo::Init() {
 
   RCLCPP_WARN_STREAM(rclcpp::get_logger("audio_io"),
     "asr_model_path_ is [" << asr_model_path_ << "]");
-   speech_engine::Instance()->Init(asr_model_path_, wakeup_name_, v_cmd_word_,
-       std::bind(&HBAudioIo::AudioASRFunc, this, std::placeholders::_1),
-       std::bind(&HBAudioIo::AudioCmdDataFunc, this, std::placeholders::_1));
+   speech_engine::Instance()->Init(asr_model_path_, kws_config_path_, v_cmd_word_, std::bind(&HBAudioIo::PubASRDataFunc, this, std::placeholders::_1, std::placeholders::_2));
 
-  RCLCPP_WARN(rclcpp::get_logger("audio_io"), "init success");
   // system("rm ./*.pcm -rf");
   if (save_audio_) {
     audio_infile_.open("./audio_in.pcm",
@@ -194,15 +182,12 @@ int HBAudioIo::Init() {
       audio_pub_topic_name_, 10);
   asr_msg_publisher_ = this->create_publisher<std_msgs::msg::String>(asr_pub_topic_name_, 10);
   tts_msg_subscriber_ = this->create_subscription<std_msgs::msg::String>(tts_sub_topic_name_, 10, std::bind(&HBAudioIo::TTSMsgCallback, this, std::placeholders::_1));
+  status_service_ = this->create_service<std_srvs::srv::Trigger>("audio_status", std::bind(&HBAudioIo::StatusServiceHandle, this, std::placeholders::_1, std::placeholders::_2));
   timer_ = this->create_wall_timer(std::chrono::duration<double>(1.0), std::bind(&HBAudioIo::CheckLLMNodeExistence, this));
+  
   is_init_ = true;
-
-  // for(int i = 0; i < 3; i++){
-  //   lamp.clear();
-  //   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  //   lamp.set_all_same_color(0, 0, 255);
-  //   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  // }
+  
+  RCLCPP_WARN(rclcpp::get_logger("audio_io"), "init success");
   return 0;
 }
 
@@ -234,11 +219,13 @@ int HBAudioIo::Run() {
   }
   speech_engine::Instance()->Start();
 
-  // 启动麦克风采集线程
+  //麦克风采集线程
   auto capture_task = std::make_shared<std::thread>(
       std::bind(&HBAudioIo::MicphoneGetThread, this));
-  auto pcm_task = std::make_shared<std::thread>(
-      std::bind(&HBAudioIo::PcmThread, this));
+  //TTS线程 
+  auto tts_task = std::make_shared<std::thread>(
+      std::bind(&HBAudioIo::TTSThread, this));
+  //扬声器播放线程
   auto speaker_task = std::make_shared<std::thread>(
       std::bind(&HBAudioIo::SpeakerThread, this));
 
@@ -273,7 +260,7 @@ int HBAudioIo::Run() {
     speaker_task->join();
     speaker_task.reset();
   }
-  if (pcm_task && pcm_task->joinable()) {
+  if (tts_task && tts_task->joinable()) {
     std::unique_lock<std::mutex> tts_queue_lock(tts_queue_mtx_);
     while (!tts_data_queue_.empty()) {
         tts_data_queue_.pop();
@@ -287,12 +274,13 @@ int HBAudioIo::Run() {
     llm_node_init_lock.unlock();
     llm_node_init_cv_.notify_all();
     
-    pcm_task->join();
-    pcm_task.reset();
+    tts_task->join();
+    tts_task.reset();
   }
   return 0;
 }
 
+//麦克风线程
 int HBAudioIo::MicphoneGetThread() {
   RCLCPP_WARN(rclcpp::get_logger("audio_io"), "start to capture audio");
   if (!micphone_device_) {
@@ -307,6 +295,7 @@ int HBAudioIo::MicphoneGetThread() {
   char *buffer_1 = new char[buffer_size];
   auto vec_ptr = std::make_shared<std::vector<double>>();
   int num = 0;
+  bool last_publish = publish_;
   while (rclcpp::ok()) {
     {
       //等待大模型启动
@@ -314,15 +303,11 @@ int HBAudioIo::MicphoneGetThread() {
       llm_node_init_cv_.wait(llm_node_init_lock, [this] { return llm_node_init_ || exiting_;});
       llm_node_init_lock.unlock();
 
+      //等待麦克风可用
       std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
       micphone_cv_.wait(micphone_lock, [this] { return !micphone_stop_ || exiting_;});
       micphone_lock.unlock();
       if(exiting_ == true) break;
-
-      // std::cout<<"------------mic-------------"<<std::endl;
-      if (publish_ == false) lamp.set_all_same_color(0, 0, 20);
-      else lamp.set_all_same_color(0, 0, 255);
-      // digitalWrite(0, HIGH);
 
       ret = alsa_device_read(micphone_device_, buffer, frames);
       if (ret <= 0) continue;
@@ -336,7 +321,6 @@ int HBAudioIo::MicphoneGetThread() {
         vec_ptr->push_back((double)(src_ptr[i * 2])*2.5);
       }
       if(num % 4 == 0){
-        // std::cout<<"send_data"<<std::endl;
         speech_engine::Instance()->send_data(vec_ptr);
         vec_ptr->clear();
         num = 0;
@@ -353,101 +337,99 @@ int HBAudioIo::MicphoneGetThread() {
   return 0;
 }
 
-void HBAudioIo::AudioCmdDataFunc(std::string cmd_word) {
+//ASR数据发布函数，提供ASR内容以及KWS检测内容
+void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
   if(containsChinese(cmd_word) == false || cmd_word.size() < 5) return;
-  std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
-  micphone_stop_ = true;
-  micphone_lock.unlock();
-  micphone_cv_.notify_one();
-  // std::cout<<"cmd_word: "<<cmd_word<<std::endl;
-  //唤醒词设置
-  if (cmd_word == "你好" || cmd_word == "开始对话"){
-    std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
-    publish_ = true;
-    llm_node_init_lock.unlock();
-  }
   
-  if (publish_ == true){
-    lamp.clear();
-    RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
-    audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
-    frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
-    frame->cmd_word = cmd_word;
-    // msg_publisher_->publish(std::move(frame));
-    auto message = std::make_unique<std_msgs::msg::String>();
-    message->data = cmd_word;
-    asr_msg_publisher_->publish(std::move(message));
-  } else {
-    micphone_lock.lock();
-    micphone_stop_ = false;
+  // continuous_wake_mode_为持续唤醒模型，即所有对话需要通过唤醒词实现交互
+  if (continuous_wake_mode_ == false){
+    std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+    micphone_stop_ = true;
     micphone_lock.unlock();
     micphone_cv_.notify_one();
+
+    //除结束对话外，其他关键词视为唤醒
+    if (key_word == "结束对话"){
+      publish_ = false;
+    } else if (key_word == cmd_word){
+      publish_ = true;
+    }
+    
+    if (publish_ == true){
+      if (key_word == cmd_word){
+        lamp.set_all_same_color(0, 0, 255);
+        micphone_lock.lock();
+        micphone_stop_ = false;
+        micphone_lock.unlock();
+        micphone_cv_.notify_one();
+        return;
+      }
+      //关闭灯光
+      lamp.clear();
+      RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
+      audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
+      frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
+      frame->cmd_word = cmd_word;
+      auto message = std::make_unique<std_msgs::msg::String>();
+      message->data = cmd_word;
+      asr_msg_publisher_->publish(std::move(message));
+    } else {
+      micphone_lock.lock();
+      micphone_stop_ = false;
+      micphone_lock.unlock();
+      micphone_cv_.notify_one();
+      
+      //灯光变暗
+      lamp.set_all_same_color(0, 0, 20);
+    }
+  } else {
+    static bool has_wakeup = false;
+    if(key_word == "结束对话") return;
+    //若仅有唤醒词，则将has_wakeup置为true并退出，等待下一轮语音输入
+    //否则则查看是否带有唤醒词，若有则剔除关键词，发送内容
+    if(key_word == cmd_word) {
+      has_wakeup = true;
+      lamp.blink_blue(2);
+      return;
+    } else {
+      if (cmd_word.find(key_word) != std::string::npos && key_word != ""){
+        size_t pos = 0;
+        while ((pos = cmd_word.find(key_word, pos)) != std::string::npos) {
+            cmd_word.erase(pos, key_word.length());
+        }
+        has_wakeup = true;
+      }
+    
+    }
+    if(has_wakeup == true){
+
+      std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
+      micphone_stop_ = true;
+      micphone_lock.unlock();
+      micphone_cv_.notify_one();
+
+
+      lamp.clear();
+      RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
+      audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
+      frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
+      frame->cmd_word = cmd_word;
+      auto message = std::make_unique<std_msgs::msg::String>();
+      message->data = cmd_word;
+      asr_msg_publisher_->publish(std::move(message));
+      has_wakeup = false;
+    }
+
   }
-  //休眠词设置
-  if (cmd_word == "再见" || cmd_word == "结束对话" || cmd_word == "拜拜") {
-    std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
-    publish_ = false;
-    llm_node_init_lock.unlock();
-    lamp.set_all_same_color(0, 0, 20);
-  }
-  
+
 }
 
-//以下函数未调用
-void HBAudioIo::AudioASRFunc(std::string asr) {
-  // if (asr.length() > 0) {
-  //   RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr msg:%s", asr.c_str());
-  //   if ((push_wakeup_) && (asr == wakeup_name_)) {
-  //     auto message = std::make_unique<std_msgs::msg::String>();
-  //     message->data = asr;
-  //     RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr publish:%s", asr.c_str());
-  //     asr_msg_publisher_->publish(std::move(message));
-  //     lamp.clear();
-  //   }
-  //   size_t pos = asr.find(wakeup_name_, 0);  
-  //   size_t pos1 = asr.find(wakeup_name_1_, 0);      
-  //   if (pos1 != std::string::npos) {
-  //     if (pos1 < (asr.length() - wakeup_name_1_.length())) {
-  //       std::string asr_msg;
-  //       asr_msg.append(asr, pos1 + wakeup_name_1_.length(), asr.length() - pos1 - wakeup_name_1_.length());
-  //       auto message = std::make_unique<std_msgs::msg::String>();
-  //       message->data = asr_msg;
-  //       RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr publish:%s", asr_msg.c_str());
-  //       asr_msg_publisher_->publish(std::move(message));
-  //       lamp.clear();
-  //     }
-  //   } else if (pos != std::string::npos) {
-  //     if (pos < (asr.length() - wakeup_name_.length())) {
-  //       std::string asr_msg;
-  //       asr_msg.append(asr, pos + wakeup_name_.length(), asr.length() - pos - wakeup_name_.length());
-  //       auto message = std::make_unique<std_msgs::msg::String>();
-  //       message->data = asr_msg;
-  //       RCLCPP_WARN(rclcpp::get_logger("audio_io"), "asr publish:%s", asr_msg.c_str());
-  //       asr_msg_publisher_->publish(std::move(message));
-  //       lamp.clear();
-  //     }
-  //   }
-  // }
-}
-
-
-
-int HBAudioIo::PcmThread() {
-
+//TTS线程
+int HBAudioIo::TTSThread() {
   std::unique_ptr<float[]> pcm_data;
   int pcm_size;
   while (rclcpp::ok()) {
-    // static bool inited = false;
-    // if(inited == false){
-    //   tts_data_queue_.push("你好");
-    //   tts_data_queue_.push("end");
-    //   std::cout<<"----------start----------"<<std::endl;
-    //   std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
-    //   micphone_stop_ = true;
-    //   micphone_lock.unlock();
-    //   inited = true;
-    // }
-    
+
     // 等待大模型节点启动
     std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
     llm_node_init_cv_.wait(llm_node_init_lock, [this] { return llm_node_init_ || exiting_;});
@@ -462,6 +444,8 @@ int HBAudioIo::PcmThread() {
     if(rclcpp::ok()){
       // std::cout<<"tts_msg_: "<<tts_msg_<<std::endl;
       if (containsChinese(tts_msg_)){
+        //所有文字内容加上句号结尾，保证TTS朗读正常
+        tts_msg_ = tts_msg_ + "。";
         auto audio = sherpa_tts_.tts_ptr_->Generate(tts_msg_, 0, 1.0f, nullptr);
         PlaybackItem p;
         p.samples = std::move(audio.samples);
@@ -490,6 +474,7 @@ int HBAudioIo::PcmThread() {
   return 0;
 }
 
+//音频播放线程
 int HBAudioIo::SpeakerThread() {
   
   // sherpa_onnx::AlsaPlay alsa(micphone_name_.c_str(), 22050);
@@ -509,7 +494,7 @@ int HBAudioIo::SpeakerThread() {
       micphone_stop_ = false;
       micphone_lock.unlock();
       micphone_cv_.notify_one();
-      // std::cout<<"输出完毕"<<std::endl;
+      lamp.set_all_same_color(0, 0, 255);
       continue;
     }
     
@@ -524,7 +509,7 @@ int HBAudioIo::SpeakerThread() {
   return 0;
 }
 
-
+//检查大模型节点是否启动
 void HBAudioIo::CheckLLMNodeExistence()
 {
   auto node_names_and_namespaces = this->get_node_names();
@@ -540,9 +525,9 @@ void HBAudioIo::CheckLLMNodeExistence()
       RCLCPP_WARN(this->get_logger(), "Node '%s' has come online!", target_node_name.c_str());
       std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
       llm_node_init_ = true;
-      publish_ = true;
       llm_node_init_lock.unlock();
       llm_node_init_cv_.notify_all();
+      publish_ = true;
   }
 
   // 大模型节点下线
@@ -550,7 +535,6 @@ void HBAudioIo::CheckLLMNodeExistence()
       RCLCPP_WARN(this->get_logger(), "Node '%s' has gone offline!", target_node_name.c_str());
       std::unique_lock<std::mutex> llm_node_init_lock(llm_node_init_mtx_);
       llm_node_init_ = false;
-      publish_ = false;
       llm_node_init_lock.unlock();
       llm_node_init_cv_.notify_all();
 
@@ -567,17 +551,23 @@ void HBAudioIo::CheckLLMNodeExistence()
       observed_nodes.erase(target_node_name);
 }
 
+//接收大模型输出内容
 void HBAudioIo::TTSMsgCallback(const std_msgs::msg::String::SharedPtr msg){
   {
     std::lock_guard<std::mutex> tts_queue_lock(tts_queue_mtx_);
     tts_data_queue_.push(msg->data);
     tts_queue_cv_.notify_one();
   }
-  // std::unique_lock<std::mutex> micphone_lock(micphone_mtx_);
-  // micphone_stop_ = true;
-  // micphone_lock.unlock();
-  // micphone_cv_.notify_one();
-  
+}
+
+//处理大模型节点状态确认的请求
+void HBAudioIo::StatusServiceHandle(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  (void)request; // 触发 service，但不使用请求
+  response->success = true;
+  response->message = "Start";
+  RCLCPP_WARN(this->get_logger(), "Service was called. Responded with Start.");
 }
 
 }  // namespace audio
