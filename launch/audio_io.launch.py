@@ -57,7 +57,8 @@ def generate_launch_description():
                 "tts_config_path": "/userdata/MagicBox/dep/matcha-icefall-zh-baker",
                 "asr_model_path": "/userdata/MagicBox/config/",
                 "kws_config_path": "/userdata/MagicBox/dep/sherpa-onnx",
-                "continuous_wake_mode": False}
+                "continuous_wake_mode": False
+                }
             ],
             arguments=['--ros-args', '--log-level', 'warn']
         )

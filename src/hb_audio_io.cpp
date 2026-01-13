@@ -349,7 +349,7 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
     micphone_cv_.notify_one();
 
     //除结束对话外，其他关键词视为唤醒
-    if (key_word == "结束对话"){
+    if (key_word == "结束对话" || key_word == "束对话"){
       publish_ = false;
     } else if (key_word == cmd_word){
       publish_ = true;
@@ -365,7 +365,8 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
         return;
       }
       //关闭灯光
-      lamp.clear();
+      // lamp.clear();
+      lamp.set_lamp_effects(LightMode::Thinking);
       RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
       audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
       frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
@@ -380,11 +381,12 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
       micphone_cv_.notify_one();
       
       //灯光变暗
-      lamp.set_all_same_color(0, 0, 20);
+      // lamp.set_all_same_color(0, 0, 20);
+      lamp.set_lamp_effects(LightMode::Breathing);
     }
   } else {
     static bool has_wakeup = false;
-    if(key_word == "结束对话") return;
+    if(key_word == "结束对话" || key_word == "束对话") return;
     //若仅有唤醒词，则将has_wakeup置为true并退出，等待下一轮语音输入
     //否则则查看是否带有唤醒词，若有则剔除关键词，发送内容
     if(key_word == cmd_word) {
@@ -409,7 +411,8 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
       micphone_cv_.notify_one();
 
 
-      lamp.clear();
+      // lamp.clear();
+      lamp.set_lamp_effects(LightMode::Thinking);
       RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
       audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
       frame->frame_type.value = frame->frame_type.SMART_AUDIO_TYPE_CMD_WORD;
@@ -542,6 +545,7 @@ void HBAudioIo::CheckLLMNodeExistence()
       micphone_stop_ = true;
       micphone_lock.unlock();
       micphone_cv_.notify_one();
+      lamp.clear();
   }
 
   // 更新观察状态

@@ -402,8 +402,7 @@ void speech_engine::process(void) {
           
           if(key_word_match_tmp != "" || key_word_sherpa != ""){
             key_word = (key_word_match_tmp != "") ? key_word_match_tmp : key_word_sherpa;
-          } else {
-            std::cout<<"Key word not found"<<std::endl;
+            // std::cout<<key_word<<std::endl;
           }
 
 
