@@ -96,11 +96,7 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                    kws_config_path_);
   this->get_parameter<bool>("continuous_wake_mode",
                                    continuous_wake_mode_);
-  
-  // std::thread loader([this]() {
-  //       this->LoadTtsModelAsync();
-  //   });
-  // loader.detach();
+
   
   int err_code = 0;
   
@@ -117,14 +113,6 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
 
 HBAudioIo::~HBAudioIo() { DeInit(); }
 
-// void HBAudioIo::LoadTtsModelAsync() {
-//     sherpa_tts_.Init(micphone_name_, tts_config_path_);
-//     std::cout<<"----------------------init--------------------------"<<std::endl; 
-//     std::unique_lock<std::mutex> model_init_lock(model_init_mtx_);
-//     model_init_ = true;
-//     model_init_cv_.notify_one();
-// }
-
 
 int HBAudioIo::Init() {
   v_cmd_word_ = std::make_shared<std::vector<std::string>>();
@@ -136,7 +124,6 @@ int HBAudioIo::Init() {
     if (root.isMember("cmd_word") && root["cmd_word"].isArray()) {
       const Json::Value& cmdWords = root["cmd_word"];
       for (const auto& word : cmdWords) {
-        // std::cout << "命令词: " << word.asString() << std::endl;
         v_cmd_word_->push_back(word.asString());
       }
     }
@@ -364,8 +351,6 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
         micphone_cv_.notify_one();
         return;
       }
-      //关闭灯光
-      // lamp.clear();
       lamp.set_lamp_effects(LightMode::Thinking);
       RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
       audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
@@ -379,9 +364,7 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
       micphone_stop_ = false;
       micphone_lock.unlock();
       micphone_cv_.notify_one();
-      
-      //灯光变暗
-      // lamp.set_all_same_color(0, 0, 20);
+    
       lamp.set_lamp_effects(LightMode::Breathing);
     }
   } else {
@@ -411,7 +394,6 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
       micphone_cv_.notify_one();
 
 
-      // lamp.clear();
       lamp.set_lamp_effects(LightMode::Thinking);
       RCLCPP_WARN(rclcpp::get_logger("audio_io"), "recv cmd word:%s", cmd_word.c_str());
       audio_msg::msg::SmartAudioData::UniquePtr frame(new audio_msg::msg::SmartAudioData());
@@ -445,7 +427,6 @@ int HBAudioIo::TTSThread() {
     tts_data_queue_.pop();
     tts_queue_lock.unlock();
     if(rclcpp::ok()){
-      // std::cout<<"tts_msg_: "<<tts_msg_<<std::endl;
       if (containsChinese(tts_msg_)){
         //所有文字内容加上句号结尾，保证TTS朗读正常
         tts_msg_ = tts_msg_ + "。";
@@ -462,10 +443,8 @@ int HBAudioIo::TTSThread() {
       }
       if(tts_msg_ == "end"){
         std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
-
         PlaybackItem p;
         p.playback = false;
-
         playback_queue_.push(p);
         playback_queue_lock.unlock();
         playback_queue_cv_.notify_one();
@@ -480,7 +459,6 @@ int HBAudioIo::TTSThread() {
 //音频播放线程
 int HBAudioIo::SpeakerThread() {
   
-  // sherpa_onnx::AlsaPlay alsa(micphone_name_.c_str(), 22050);
   while (rclcpp::ok()) {
     PlaybackItem item;
     std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);

@@ -272,9 +272,7 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
       auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_pre).count();
       auto interval2 = std::chrono::duration_cast<std::chrono::milliseconds>(vad_stop - vad_start).count();
       if (interval >= 500) {
-        //std::cout << "send_data--------disable" << std::endl;
         if ((interval2 > params.min_speech_duration_ms) && (vad_data_ptr)) {
-          // std::lock_guard<std::mutex> lock(mutex);
           if (process_queue.size() >= kMaxQueueSize) {
             process_queue.pop();
           }
@@ -300,7 +298,6 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
       vad_pre = std::chrono::system_clock::now();
       auto interval2 = std::chrono::duration_cast<std::chrono::milliseconds>(vad_pre - vad_send).count();
       if (interval2 >= params.max_speech_duration_ms) {
-        // std::lock_guard<std::mutex> lock(mutex);
         if (process_queue.size() >= kMaxQueueSize) {
           process_queue.pop();
         }
@@ -330,7 +327,6 @@ void speech_engine::send_data(std::shared_ptr<std::vector<double>> data) {
       if (interval >= 1 * 1000) {
         asr_final = false;
         auto temp_ptr = std::make_shared<std::vector<double>>();
-        // std::lock_guard<std::mutex> lock(mutex);
         if (process_queue.size() >= kMaxQueueSize) {
           process_queue.pop();
         }
@@ -359,7 +355,6 @@ void speech_engine::process(void) {
         auto data = process_queue.front().first;
         auto end_flag = process_queue.front().second;
         process_queue.pop();
-        //std::vector<double> speech_segment;
         if (data->size() > 0) {
           auto start_time = std::chrono::system_clock::now();
           if (sense_voice_full_parallel(ctx, wparams, *data, data->size(), params.n_processors) != 0) {
@@ -402,11 +397,8 @@ void speech_engine::process(void) {
           
           if(key_word_match_tmp != "" || key_word_sherpa != ""){
             key_word = (key_word_match_tmp != "") ? key_word_match_tmp : key_word_sherpa;
-            // std::cout<<key_word<<std::endl;
           }
-
-
-          asr_data_cb_(tmp_str, key_word); //todo
+          asr_data_cb_(tmp_str, key_word); 
         }
       }
     }

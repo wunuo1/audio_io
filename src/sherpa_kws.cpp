@@ -94,17 +94,10 @@ void SherpaKWS::Init(const std::string &config_path, bool use_int8){
 std::string SherpaKWS::GetKeyWord(std::vector<float> &samples){
   int32_t sampling_rate = 16000;
 
-  // bool is_ok = false;
-  // const std::vector<float> samples =
-  //     sherpa_onnx::ReadWave(wav_filename, &sampling_rate, &is_ok);
-
-  // auto begin = std::chrono::steady_clock::now();
-
   auto s = keyword_spotter_ptr_->CreateStream();
   s->AcceptWaveform(sampling_rate, samples.data(), samples.size());
 
   std::vector<float> tail_paddings(static_cast<int>(0.8 * sampling_rate));
-  // Note: We can call AcceptWaveform() multiple times.
   s->AcceptWaveform(sampling_rate, tail_paddings.data(),
                     tail_paddings.size());
 
@@ -121,19 +114,6 @@ std::string SherpaKWS::GetKeyWord(std::vector<float> &samples){
     }
   }
   return result;
-  // auto end = std::chrono::steady_clock::now();
-
-  // float duration = samples.size() / static_cast<float>(sampling_rate);
-
-  // float elapsed_seconds =
-  //     std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
-  //         .count() /
-  //     1000.;
-  // float rtf = elapsed_seconds / duration;
-  // // fprintf(stderr, "Number of threads: %d\n", config.model_config.num_threads);
-  // fprintf(stderr, "Audio duration: %.3f s\n", duration);
-  // fprintf(stderr, "Elapsed seconds: %.3f\n", elapsed_seconds);
-  // fprintf(stderr, "RTF = %.3f/%.3f = %.3f\n", elapsed_seconds, duration, rtf);
 }
 
 //获取关键词列表
@@ -143,7 +123,6 @@ bool SherpaKWS::ExtractChineseFromFile(std::vector<std::string> &key_words_list)
         std::cerr << "无法打开文件: " << key_words_file_ << std::endl;
         return false;
     }
-
     std::string line;
     while (std::getline(fin, line)) {
         size_t pos = line.find('@');
@@ -152,7 +131,6 @@ bool SherpaKWS::ExtractChineseFromFile(std::vector<std::string> &key_words_list)
             key_words_list.push_back(chinese);
         }
     }
-
     fin.close();
     return true;
 }

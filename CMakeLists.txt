@@ -176,13 +176,6 @@ add_executable(${PROJECT_NAME}
   src/sherpa_kws.cpp
 )
 
-#add_executable(test_sh
-#  src/utils/alsa_device.cpp
-#  src/test.cpp
-#  src/sherap_tts/sherpa_tts.cpp
-#  src/sherap_tts/alsa-play-new.cc
-#)
-
 
 #set(BASE_LIBRARIES pthread dl rt m)
 set(BASE_LIBRARIES pthread)
@@ -206,9 +199,6 @@ set(TTS_LIB  sherpa-onnx-core
 target_link_libraries(${PROJECT_NAME}
    ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB} kaldi-decoder-core ssentencepiece_core
 )
-#target_link_libraries(test_sh
-#   ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB} gpiod
-#)
 
 ament_target_dependencies(${PROJECT_NAME} rclcpp geometry_msgs audio_msg std_srvs)
 

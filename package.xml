@@ -4,7 +4,7 @@
   <name>audio_io</name>
   <version>1.0.0</version>
   <description>TogetheROS audio_io</description>
-  <maintainer email="guangyuan.ning@d-robotics.cc">guangyuan.ning</maintainer>
+  <maintainer email="847005649@qq.com">nuo.wu</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

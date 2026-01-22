@@ -1,6 +1,6 @@
 # 功能介绍
 
-audio_io功能包用于音频处理，ASR使用SenseVoice，TTS以及KWS使用sherpa-onnx，实现以下两条链路：
+audio_io功能包用于音频处理，ASR使用SenseVoice，[TTS](https://forum.d-robotics.cc/t/topic/33355)以及[KWS](https://forum.d-robotics.cc/t/topic/33616)使用[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)，实现以下两条链路：
 - 麦克风获取   --> ASR+KWS --> 发布语音识别内容
 - 接收文字内容 -->   TTS   --> 扬声器输出
 
@@ -24,10 +24,10 @@ audio_io功能包用于音频处理，ASR使用SenseVoice，TTS以及KWS使用sh
 # 接口说明
 ## 话题
 
-| 名称         | 消息类型                                                                                                            | 说明                               |
-| ------------ | -------------------------------------------------------------------------------------------------------------------| ---------------------------------- |
-| /prompt_text | std_msgs/msg/String                                                                                                | 发布ASR识别结果，该名称与大模型输入话题一致 |
-| /tts_text    | std_msgs/msg/String                                                                                                | 接收要TTS的内容，与大模型结果发布话题一致   |
+| 名称    | 消息类型                                                   | 说明                               |
+| ------------ | -----------------------------------------------------| ---------------------------------- |
+| /prompt_text | std_msgs/msg/String                                  | 发布ASR识别结果，该名称与大模型输入话题一致 |
+| /tts_text    | std_msgs/msg/String                                  | 接收要TTS的内容，与大模型结果发布话题一致   |
 
 ## 参数
 
