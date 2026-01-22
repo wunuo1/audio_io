@@ -39,10 +39,6 @@ def generate_launch_description():
             'push_wakeup',
             default_value='0',
             description='push wakeup_name in asr before'),
-        DeclareLaunchArgument(
-            'wakeup_name',
-            default_value='你好',
-            description='wakeup name'),
         # 启动音频采集pkg
         Node(
             package='audio_io',
@@ -52,7 +48,6 @@ def generate_launch_description():
                 {"micphone_name": LaunchConfiguration('micphone_name')},
                 {"asr_model": LaunchConfiguration('audio_asr_model')},
                 {"push_wakeup": LaunchConfiguration('push_wakeup')},
-                {"wakeup_name": LaunchConfiguration('wakeup_name')},
                 {"asr_pub_topic_name": LaunchConfiguration('asr_pub_topic_name'),
                 "tts_config_path": "/userdata/MagicBox/dep/matcha-icefall-zh-baker",
                 "asr_model_path": "/userdata/MagicBox/config/",
