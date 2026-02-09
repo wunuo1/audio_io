@@ -35,8 +35,11 @@ audio_io功能包用于音频处理，ASR使用SenseVoice，[TTS](https://forum.
 | -------------------- | ----------- | ------------------ | -------- | ---------------- | ------------ |
 | micphone_name          | std::string | 语音采集设备       | 否       | 根据实际情况配置 | plughw:0,0     |
 | continuous_wake_mode | bool | 是否启动持续唤醒模型 | 否       | true/false | false |
+| wait_for_llm         | bool | 是否等待大模型启动   | 否   | true/false | true |
 | asr_pub_topic_name   | std::string | ASR结果发布话题    | 否       | 根据实际情况配置 | /prompt_text   |
 | tts_sub_topic_name   | std::string | TTS内容接收话题    | 否       | 根据实际情况配置 | /tts_text   |
+| tts_config_path      | std::string | 配置TTS路径       | 否        | 根据实际情况配置 | /userdata/MagicBox/dep/matcha-icefall-zh-baker |
+| kws_config_path      | std::string | 配置KWS路径       | 否        | 根据实际情况配置 | /userdata/MagicBox/dep/sherpa-onnx |
 ```
 
 # 常见问题

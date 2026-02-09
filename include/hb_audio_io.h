@@ -26,14 +26,15 @@
 #include <mutex>
 #include <condition_variable>
 #include <alsa/asoundlib.h>
-// #include <speex/speex_preprocess.h>
+
+#include "sherpa_tts.h"
+#include "utils/alsa_device.h"
+
 #include "audio_msg/msg/smart_audio_data.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "utils/alsa_device.h"
-#include "WS2812B.h"
-#include "sherpa_tts.h"
 #include "std_srvs/srv/trigger.hpp"
+#include "lighting_control/ws2812b.h"
 
 namespace hobot {
 namespace audio {
@@ -83,8 +84,8 @@ class HBAudioIo : public rclcpp::Node {
   int asr_output_mode_ = 0;
   int asr_output_channel_ = 3;
 
-  std::string config_path_ = "./config";
   // audio_sdk_path_ will be updated at runtime with env "TROS_DISTRO"
+  std::string pkg_name_ = "audio_io";
   std::string asr_model_ = "sense-voice-small-fp16.gguf";
   std::string asr_model_path_ = "";
   std::string kws_config_path_ = "/userdata/MagicBox/dep/sherpa-onnx";
@@ -99,8 +100,6 @@ class HBAudioIo : public rclcpp::Node {
   void* tts_ = nullptr;
   char* pcm_data_ = nullptr;
   std::queue<PlaybackItem> playback_queue_;
-  std::shared_ptr<std::vector<std::string>> v_cmd_word_;
-  std::string cmd_word_path_ = "./config/cmd_word.json";
 
   std::mutex tts_queue_mtx_;
   std::mutex micphone_mtx_;
@@ -113,6 +112,7 @@ class HBAudioIo : public rclcpp::Node {
   std::condition_variable llm_node_init_cv_;
 
   bool llm_node_init_ = false;
+  bool wait_for_llm_ = true;
   bool micphone_stop_ = true;
   std::atomic<bool> publish_{true};
 

@@ -156,8 +156,7 @@ void sense_voice_free(struct sense_voice_context * ctx) {
 }
 
 
-int speech_engine::Init(const std::string &cfg_path, const std::string &kws_cfg_path, std::shared_ptr<std::vector<std::string>> v_cmd_word, ASRCallBackFunc cmd_func) {
-  v_cmd_word_ = v_cmd_word;
+int speech_engine::Init(const std::string &cfg_path, const std::string &kws_cfg_path, ASRCallBackFunc cmd_func) {
   asr_data_cb_ = cmd_func;
   params.model = cfg_path;
   vad_pad.resize(64, 0.0f);

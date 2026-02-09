@@ -99,7 +99,7 @@ class speech_engine {
     return engine;
   }
   ~speech_engine(){}
-  int Init(const std::string &cfg_path, const std::string &kws_cfg_path, std::shared_ptr<std::vector<std::string>> v_cmd_word, ASRCallBackFunc cmd_func);
+  int Init(const std::string &cfg_path, const std::string &kws_cfg_path, ASRCallBackFunc cmd_func);
   int DeInit();
   int Start();
   int Stop();

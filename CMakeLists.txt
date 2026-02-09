@@ -33,6 +33,7 @@ find_package(audio_msg REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(jsoncpp REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(lighting_control REQUIRED)
 
 set(SHERPA_PATH_LIST ${CMAKE_SOURCE_DIR}/sherpa-onnx ${CMAKE_SOURCE_DIR}/sherpa-onnx-master)
 foreach(dir ${SHERPA_PATH_LIST})
@@ -58,6 +59,7 @@ include_directories(
   include
   ${DEP_INCLUDE_DIRS}
   ${SHERPA_PATH}
+  ${lighting_control_INCLUDE_DIRS}
 )
 
 link_directories(
@@ -213,12 +215,6 @@ DESTINATION ./)
 # Install libraries
 install(TARGETS ${PROJECT_NAME}
   DESTINATION lib/${PROJECT_NAME}/)
-
-# Install include directories
-install(
-  DIRECTORY config
-  DESTINATION lib/${PROJECT_NAME}/
-)
 
 # Install model directories
 install(

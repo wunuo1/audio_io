@@ -12,6 +12,7 @@
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>audio_msg</depend>
+  <depend>lighting_control</depend>
   <depend>ament_cmake_gtest</depend>
 
   <test_depend>ament_lint_auto</test_depend>

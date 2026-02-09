@@ -22,6 +22,7 @@
 #include <json/json.h>
 #include <chrono>
 #include <thread>
+#include "ament_index_cpp/get_package_prefix.hpp"
 
 namespace hobot {
 namespace audio {
@@ -56,9 +57,6 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
   std::string tros_distro
       = std::string(std::getenv("TROS_DISTRO")? std::getenv("TROS_DISTRO") : "");
 
-  asr_model_path_ = "/root/";
-  cmd_word_path_ = "/opt/tros/" + tros_distro + "/lib/sensevoice_ros2/config/cmd_word.json";
-
   this->declare_parameter<std::string>("micphone_name",
                                        micphone_name_);
   this->declare_parameter<std::string>("audio_pub_topic_name",
@@ -77,6 +75,8 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                        kws_config_path_);
   this->declare_parameter<bool>("continuous_wake_mode",
                                        continuous_wake_mode_);
+  this->declare_parameter<bool>("wait_for_llm",
+                                       wait_for_llm_);
 
   this->get_parameter<std::string>("micphone_name",
                                    micphone_name_);
@@ -96,10 +96,12 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                    kws_config_path_);
   this->get_parameter<bool>("continuous_wake_mode",
                                    continuous_wake_mode_);
+  this->get_parameter<bool>("wait_for_llm",
+                                       wait_for_llm_);
+
 
   
   int err_code = 0;
-  
   asr_model_path_ += asr_model_;
   std::stringstream ss;
   ss << "Parameter:"
@@ -115,21 +117,7 @@ HBAudioIo::~HBAudioIo() { DeInit(); }
 
 
 int HBAudioIo::Init() {
-  v_cmd_word_ = std::make_shared<std::vector<std::string>>();
-
-  std::ifstream cmd_word(cmd_word_path_);
-  if (cmd_word.is_open()) {
-    Json::Value root;
-    cmd_word >> root;
-    if (root.isMember("cmd_word") && root["cmd_word"].isArray()) {
-      const Json::Value& cmdWords = root["cmd_word"];
-      for (const auto& word : cmdWords) {
-        v_cmd_word_->push_back(word.asString());
-      }
-    }
-    cmd_word.close();
-  }  
-
+  
   RCLCPP_INFO(rclcpp::get_logger("audio_io"), "init to capture audio");
   micphone_device_ = alsa_device_allocate();
   if (!micphone_device_) {
@@ -158,7 +146,7 @@ int HBAudioIo::Init() {
 
   RCLCPP_WARN_STREAM(rclcpp::get_logger("audio_io"),
     "asr_model_path_ is [" << asr_model_path_ << "]");
-   speech_engine::Instance()->Init(asr_model_path_, kws_config_path_, v_cmd_word_, std::bind(&HBAudioIo::PubASRDataFunc, this, std::placeholders::_1, std::placeholders::_2));
+   speech_engine::Instance()->Init(asr_model_path_, kws_config_path_, std::bind(&HBAudioIo::PubASRDataFunc, this, std::placeholders::_1, std::placeholders::_2));
 
   // system("rm ./*.pcm -rf");
   if (save_audio_) {
@@ -170,7 +158,13 @@ int HBAudioIo::Init() {
   asr_msg_publisher_ = this->create_publisher<std_msgs::msg::String>(asr_pub_topic_name_, 10);
   tts_msg_subscriber_ = this->create_subscription<std_msgs::msg::String>(tts_sub_topic_name_, 10, std::bind(&HBAudioIo::TTSMsgCallback, this, std::placeholders::_1));
   status_service_ = this->create_service<std_srvs::srv::Trigger>("audio_status", std::bind(&HBAudioIo::StatusServiceHandle, this, std::placeholders::_1, std::placeholders::_2));
-  timer_ = this->create_wall_timer(std::chrono::duration<double>(1.0), std::bind(&HBAudioIo::CheckLLMNodeExistence, this));
+  
+  if(wait_for_llm_ == true){
+    timer_ = this->create_wall_timer(std::chrono::duration<double>(1.0), std::bind(&HBAudioIo::CheckLLMNodeExistence, this));
+  } else {
+    llm_node_init_ = true;
+  }
+  
   
   is_init_ = true;
   
@@ -374,7 +368,7 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
     //否则则查看是否带有唤醒词，若有则剔除关键词，发送内容
     if(key_word == cmd_word) {
       has_wakeup = true;
-      lamp.blink_blue(2);
+      lamp.set_blink(2, 0, 0, 255);
       return;
     } else {
       if (cmd_word.find(key_word) != std::string::npos && key_word != ""){
