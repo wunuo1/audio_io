@@ -52,11 +52,11 @@ void SherpaKWS::Init(const std::string &config_path, bool use_int8){
   std::string name = GetProgramPath();
   std::vector<std::string> args = {
       name,
-      "--encoder=" + config_path + "/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/encoder-epoch-12-avg-2-chunk-16-left-64" + i8_suffix + ".onnx",
-      "--decoder=" + config_path + "/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/decoder-epoch-12-avg-2-chunk-16-left-64" + i8_suffix + ".onnx",
-      "--joiner=" + config_path + "/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/joiner-epoch-12-avg-2-chunk-16-left-64" + i8_suffix + ".onnx",
-      "--tokens=" + config_path + "/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/tokens.txt",
-      "--keywords-file=" + config_path + "/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/keywords.txt",
+      "--encoder=" + config_path + "/encoder-epoch-12-avg-2-chunk-16-left-64" + i8_suffix + ".onnx",
+      "--decoder=" + config_path + "/decoder-epoch-12-avg-2-chunk-16-left-64" + i8_suffix + ".onnx",
+      "--joiner=" + config_path + "/joiner-epoch-12-avg-2-chunk-16-left-64" + i8_suffix + ".onnx",
+      "--tokens=" + config_path + "/tokens.txt",
+      "--keywords-file=" + config_path + "/keywords.txt",
       ""
   };
   size_t pos = args[5].find('=');

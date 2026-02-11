@@ -63,8 +63,6 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                        audio_pub_topic_name_);
   this->declare_parameter<std::string>("asr_pub_topic_name",
                                        asr_pub_topic_name_);
-  this->declare_parameter<std::string>("asr_model",
-                                       asr_model_);
   this->declare_parameter<std::string>("tts_sub_topic_name",
                                        tts_sub_topic_name_);
   this->declare_parameter<std::string>("tts_config_path",
@@ -84,8 +82,6 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
                                    audio_pub_topic_name_);
   this->get_parameter<std::string>("asr_pub_topic_name",
                                    asr_pub_topic_name_);
-  this->get_parameter<std::string>("asr_model",
-                                   asr_model_);
   this->get_parameter<std::string>("tts_sub_topic_name",
                                    tts_sub_topic_name_);
   this->get_parameter<std::string>("tts_config_path",
@@ -102,7 +98,6 @@ HBAudioIo::HBAudioIo(const std::string &node_name,
 
   
   int err_code = 0;
-  asr_model_path_ += asr_model_;
   std::stringstream ss;
   ss << "Parameter:"
      << "\n micphone_name: " << micphone_name_
@@ -157,12 +152,13 @@ int HBAudioIo::Init() {
       audio_pub_topic_name_, 10);
   asr_msg_publisher_ = this->create_publisher<std_msgs::msg::String>(asr_pub_topic_name_, 10);
   tts_msg_subscriber_ = this->create_subscription<std_msgs::msg::String>(tts_sub_topic_name_, 10, std::bind(&HBAudioIo::TTSMsgCallback, this, std::placeholders::_1));
-  status_service_ = this->create_service<std_srvs::srv::Trigger>("audio_status", std::bind(&HBAudioIo::StatusServiceHandle, this, std::placeholders::_1, std::placeholders::_2));
   
   if(wait_for_llm_ == true){
+    status_service_ = this->create_service<std_srvs::srv::Trigger>("audio_status", std::bind(&HBAudioIo::StatusServiceHandle, this, std::placeholders::_1, std::placeholders::_2));
     timer_ = this->create_wall_timer(std::chrono::duration<double>(1.0), std::bind(&HBAudioIo::CheckLLMNodeExistence, this));
   } else {
     llm_node_init_ = true;
+    micphone_stop_ = false;
   }
   
   
@@ -398,9 +394,7 @@ void HBAudioIo::PubASRDataFunc(std::string cmd_word, std::string key_word) {
       asr_msg_publisher_->publish(std::move(message));
       has_wakeup = false;
     }
-
   }
-
 }
 
 //TTS线程
@@ -458,7 +452,7 @@ int HBAudioIo::SpeakerThread() {
     std::unique_lock<std::mutex> playback_queue_lock(playback_queue_mtx_);
     playback_queue_cv_.wait(playback_queue_lock, [this] { return !playback_queue_.empty() || exiting_; });
     if(exiting_ == true) break;
-
+    micphone_stop_ = true;
     item = std::move(playback_queue_.front());
 
     playback_queue_.pop();

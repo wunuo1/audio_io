@@ -32,13 +32,25 @@ def generate_launch_description():
             default_value='/prompt_text',
             description='hobot audio publish topic name'),
         DeclareLaunchArgument(
-            'audio_asr_model',
-            default_value='sense-voice-small-fp16.gguf',
-            description='hobot audio asr model'),
+            'tts_config_path',
+            default_value='/userdata/MagicBox/dep/matcha-icefall-zh-baker',
+            description='TTS config path'),
         DeclareLaunchArgument(
-            'push_wakeup',
-            default_value='0',
-            description='push wakeup_name in asr before'),
+            'asr_model_path',
+            default_value='/userdata/MagicBox/config/sense-voice-small-fp16.gguf',
+            description='ASR model path'),
+        DeclareLaunchArgument(
+            'kws_config_path',
+            default_value='/userdata/MagicBox/dep/sherpa-onnx/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01',
+            description='KWS config path'),
+        DeclareLaunchArgument(
+            "continuous_wake_mode", 
+            default_value="False",
+            description='Is it set to continuous wake-up mode'),
+         DeclareLaunchArgument(
+            "wait_for_llm", 
+            default_value="True",
+            description='should we wait for the large model to start'),
         # 启动音频采集pkg
         Node(
             package='audio_io',
@@ -46,14 +58,12 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {"micphone_name": LaunchConfiguration('micphone_name')},
-                {"asr_model": LaunchConfiguration('audio_asr_model')},
-                {"push_wakeup": LaunchConfiguration('push_wakeup')},
                 {"asr_pub_topic_name": LaunchConfiguration('asr_pub_topic_name'),
-                "tts_config_path": "/userdata/MagicBox/dep/matcha-icefall-zh-baker",
-                "asr_model_path": "/userdata/MagicBox/config/",
-                "kws_config_path": "/userdata/MagicBox/dep/sherpa-onnx",
-                "continuous_wake_mode": False,
-                "wait_for_llm": True,
+                "tts_config_path": LaunchConfiguration('tts_config_path'),
+                "asr_model_path": LaunchConfiguration('asr_model_path'),
+                "kws_config_path": LaunchConfiguration('kws_config_path'),
+                "continuous_wake_mode": LaunchConfiguration('continuous_wake_mode'),
+                "wait_for_llm": LaunchConfiguration('wait_for_llm'),
                 }
             ],
             arguments=['--ros-args', '--log-level', 'warn']

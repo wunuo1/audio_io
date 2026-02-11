@@ -86,13 +86,12 @@ class HBAudioIo : public rclcpp::Node {
 
   // audio_sdk_path_ will be updated at runtime with env "TROS_DISTRO"
   std::string pkg_name_ = "audio_io";
-  std::string asr_model_ = "sense-voice-small-fp16.gguf";
-  std::string asr_model_path_ = "";
-  std::string kws_config_path_ = "/userdata/MagicBox/dep/sherpa-onnx";
+  std::string asr_model_path_ = "/userdata/MagicBox/config/sense-voice-small-fp16.gguf";
+  std::string kws_config_path_ = "/userdata/MagicBox/dep/sherpa-onnx/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01";
   std::string audio_pub_topic_name_ = "/audio_smart";
   std::string asr_pub_topic_name_ = "/prompt_text";
   std::string tts_sub_topic_name_ = "/tts_text";
-  std::string tts_config_path_ = "./matcha-icefall-zh-baker";
+  std::string tts_config_path_ = "/userdata/MagicBox/dep/matcha-icefall-zh-baker";
   std::ofstream audio_infile_;
   std::ofstream audio_sdk_;
   bool continuous_wake_mode_ = false; 

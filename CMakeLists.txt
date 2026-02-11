@@ -59,7 +59,6 @@ include_directories(
   include
   ${DEP_INCLUDE_DIRS}
   ${SHERPA_PATH}
-  ${lighting_control_INCLUDE_DIRS}
 )
 
 link_directories(
@@ -202,7 +201,7 @@ target_link_libraries(${PROJECT_NAME}
    ${X3_AUDIO_LIB} ${X3_HAPI_LIB} ${BASE_LIBRARIES}  pthread ${TTS_LIB} kaldi-decoder-core ssentencepiece_core
 )
 
-ament_target_dependencies(${PROJECT_NAME} rclcpp geometry_msgs audio_msg std_srvs)
+ament_target_dependencies(${PROJECT_NAME} rclcpp geometry_msgs audio_msg std_srvs lighting_control)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
