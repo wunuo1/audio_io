@@ -4,6 +4,51 @@ audio_io功能包用于音频处理，ASR使用[SenseVoice](https://www.modelsco
 - 麦克风获取   --> ASR+KWS --> 发布语音识别内容
 - 接收文字内容 -->   TTS   --> 扬声器输出
 
+
+# 板端编译
+
+1、编译环境确认
+
+- 板端已安装X5 Ubuntu系统。
+- 当前编译终端已设置TogetherROS环境变量：`source PATH/setup.bash`。其中PATH为TogetherROS的安装路径。
+- 已安装ROS2编译工具colcon。安装的ROS不包含编译工具colcon, 需要手动安装colcon。colcon安装命令：`pip install -U colcon-common-extensions`
+
+2、依赖安装
+```shell
+apt install libfst-dev ros-humble-std-srvs
+```
+
+3、编译依赖
+
+链接第三方仓库 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx.git):
+ 
+```shell
+git clone https://github.com/k2-fsa/sherpa-onnx.git
+cd sherpa-onnx  
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j6
+# 链接sherpa-onnx到工程目录下，路径自行配置
+cd audio_io && ln -s sherpa-onnx_path .
+
+# 拉取TTS模型，路径可通过tts_config_path配置
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-baker.tar.bz2
+tar xvf matcha-icefall-zh-baker.tar.bz2
+rm matcha-icefall-zh-baker.tar.bz2
+
+# 拉取KWS模型，路径可通过kws_config_path配置
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+tar xf sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+rm sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+```
+
+4、编译
+```shell
+colcon build --packages-select audio_io
+```
+
+
 # 使用方法
 
 ## 准备工作
